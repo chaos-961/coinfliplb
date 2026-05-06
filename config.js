@@ -10,7 +10,7 @@
 const CONFIG = {
   // CHANGE ME after deploying the backend to Railway. No trailing slash.
   // Example: "https://coinflip-arena-production.up.railway.app"
-  API_BASE_URL: "http://coinfliplb-production.up.railway.app",
+  API_BASE_URL: "https://coinfliplb-production.up.railway.app",
 
   // Display value only. The real starting balance is set in the
   // backend env var STARTING_BALANCE — keep these two in sync.
