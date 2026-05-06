@@ -163,6 +163,16 @@
         <button class="btn btn-ghost btn-sm" id="result-banner-close" aria-label="Dismiss">✕</button>
       </div>
 
+      <!-- Lost state: player can still browse, but all game actions are locked. -->
+      <div class="card lost-card" id="lost-card" hidden role="status" aria-live="polite">
+        <div class="lost-coin" aria-hidden="true">$0</div>
+        <div class="lost-copy">
+          <h2>You Lost!</h2>
+          <p>Your balance reached $0. You can still view open games, your games, and the leaderboard, but game actions are locked.</p>
+        </div>
+        <button type="button" class="btn btn-primary btn-sm" id="lost-signout">Sign out</button>
+      </div>
+
       <!-- Create a game -->
       <div class="card create-card">
         <div class="card-header">
@@ -210,11 +220,11 @@
                 pattern="[0-9]*"
                 min="1"
                 step="1"
-                placeholder="$1 - your balance"
+                placeholder="1 - your balance"
                 required
               />
             </div>
-            <span class="field-hint" id="wager-hint">$1 - your balance</span>
+            <span class="field-hint" id="wager-hint">1 - your balance</span>
           </label>
 
           <button type="submit" class="btn btn-primary btn-lg" id="create-btn">Create game</button>
@@ -304,7 +314,7 @@
     </section>
   </main>
 
-  <footer class="app-footer" aria-label="Version">v0.6</footer>
+  <footer class="app-footer" aria-label="Version">v0.8</footer>
 
   <!-- =============================================================== -->
   <!-- FLIP MODAL -->

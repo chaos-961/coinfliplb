@@ -28,10 +28,10 @@ window.CONFIG = Object.freeze({
   // ----- Flip animation ----------------------------------------------
   // Total time the flip modal animates before revealing the result.
   // Lower = snappier, higher = more suspense.
-  DEFAULT_FLIP_DURATION_MS: 2600,
+  DEFAULT_FLIP_DURATION_MS: 3000,
 
   // ----- Polling -----------------------------------------------------
   // How often the dashboard refreshes data (open games + your games).
   // Pauses while the tab is hidden or while a flip is animating.
-  POLLING_INTERVAL_MS: 5000,
+  POLLING_INTERVAL_MS: 60000,
 });

@@ -97,6 +97,8 @@
       userName:     $('#user-name'),
       logoutBtn:    $('#logout-btn'),
       themeToggle:  $('#theme-toggle'),
+      lostCard:     $('#lost-card'),
+      lostSignout:  $('#lost-signout'),
 
       // Views
       viewAuth:      $('#view-auth'),
@@ -387,6 +389,33 @@
   // -------------------------------------------------------------------
   // Theme + wager limits
   // -------------------------------------------------------------------
+  function isEliminated() {
+    if (!state.user) return false;
+    const balance = Number(state.user.balance);
+    return Number.isFinite(balance) && balance <= 0;
+  }
+
+  function applyEliminatedState() {
+    const lost = isEliminated();
+    document.body.classList.toggle('is-eliminated', lost);
+    if (els.lostCard) els.lostCard.hidden = !lost;
+
+    const disabledControls = [
+      els.wagerInput,
+      els.createBtn,
+      ...(els.formCreateGame ? Array.from(els.formCreateGame.querySelectorAll('input[name="choice"]')) : []),
+    ];
+    disabledControls.forEach(control => {
+      if (control) control.disabled = lost;
+    });
+
+    if (els.createFeedback && lost) {
+      showFeedback(els.createFeedback, 'You Lost! You can still view games and the leaderboard, but you cannot create, join, or cancel games.', 'error');
+    } else if (els.createFeedback && !lost && els.createFeedback.textContent.includes('You Lost!')) {
+      clearFeedback(els.createFeedback);
+    }
+  }
+
   function applyTheme(theme) {
     const next = (theme === 'light') ? 'light' : 'dark';
     state.theme = next;
@@ -414,14 +443,14 @@
     if (!els.wagerInput) return;
     const min = Number(CONFIG.MIN_WAGER) || 1;
     const max = getMaxAllowedWager();
-    const maxText = max >= min ? `$${compactMoney(max)}` : '$0';
     els.wagerInput.min = String(min);
     els.wagerInput.max = max >= min ? String(max) : String(min);
-    els.wagerInput.placeholder = `$${compactMoney(min)} - ${maxText}`;
-    if (els.wagerHint) {
-      els.wagerHint.textContent = max >= min
-        ? `Allowed: $${compactMoney(min)} - ${maxText}`
-        : 'You need at least $1 to create a game.';
+    if (max >= min) {
+      els.wagerInput.placeholder = `${compactMoney(min)} - ${compactMoney(max)}`;
+      if (els.wagerHint) els.wagerHint.textContent = `Allowed: ${compactMoney(min)} - ${compactMoney(max)}`;
+    } else {
+      els.wagerInput.placeholder = 'You Lost!';
+      if (els.wagerHint) els.wagerHint.textContent = 'You Lost!';
     }
   }
 
@@ -452,6 +481,7 @@
       if (els.userName) els.userName.hidden = true;
       if (els.logoutBtn) els.logoutBtn.hidden = true;
       updateWagerLimitUI();
+      applyEliminatedState();
       return;
     }
     els.topbar.hidden = false;
@@ -461,6 +491,7 @@
     els.userName.textContent = state.user.username;
     els.logoutBtn.hidden = false;
     updateWagerLimitUI();
+    applyEliminatedState();
   }
 
   // -------------------------------------------------------------------
@@ -709,9 +740,14 @@
 
       const joinBtn = $('.game-row-join', node);
       const isOwn = (g.creator_id === myId);
+      const lost = isEliminated();
       const insufficient = (Number(g.wager) > myBalance);
       if (joinBtn) {
-        if (isOwn) {
+        if (lost) {
+          joinBtn.disabled = true;
+          joinBtn.textContent = 'You Lost';
+          joinBtn.title = 'You can view games, but you cannot play after reaching $0.';
+        } else if (isOwn) {
           joinBtn.textContent = 'Cancel';
           joinBtn.classList.remove('btn-primary');
           joinBtn.classList.add('btn-danger');
@@ -819,7 +855,13 @@
         amount.classList.add('is-pending');
         if (isCreator && cancelBtn) {
           cancelBtn.hidden = false;
-          on(cancelBtn, 'click', () => handleCancelGame(g.id, cancelBtn));
+          if (isEliminated()) {
+            cancelBtn.disabled = true;
+            cancelBtn.textContent = 'Locked';
+            cancelBtn.title = 'You cannot cancel games after reaching $0.';
+          } else {
+            on(cancelBtn, 'click', () => handleCancelGame(g.id, cancelBtn));
+          }
         }
       } else if (g.status === 'completed') {
         const won = (g.winner_id === myId);
@@ -1015,6 +1057,11 @@
     e.preventDefault();
     clearFeedback(els.createFeedback);
 
+    if (isEliminated()) {
+      showFeedback(els.createFeedback, 'You Lost! You cannot create another game.', 'error');
+      return;
+    }
+
     sanitizeIntegerInput(els.wagerInput, { clampMax: true });
     const choice = (els.formCreateGame.querySelector('input[name="choice"]:checked') || {}).value;
     const wager  = parseWholeDollars(els.wagerInput.value);
@@ -1026,7 +1073,7 @@
     const minWager = Number(CONFIG.MIN_WAGER) || 1;
     const maxWager = getMaxAllowedWager();
     if (wager === null || wager < minWager || wager > maxWager) {
-      showFeedback(els.createFeedback, `Wager must be between $${compactMoney(minWager)} and $${compactMoney(maxWager)}.`, 'error');
+      showFeedback(els.createFeedback, `Wager must be between ${compactMoney(minWager)} and ${compactMoney(maxWager)}.`, 'error');
       return;
     }
 
@@ -1058,6 +1105,10 @@
   // Cancel game
   // -------------------------------------------------------------------
   async function handleCancelGame(gameId, btn) {
+    if (isEliminated()) {
+      showFeedback(els.createFeedback, 'You Lost! You cannot cancel games.', 'error');
+      return;
+    }
     if (!gameId || !confirm('Cancel this open game and refund the wager?')) return;
     setLoading(btn, true);
     try {
@@ -1083,6 +1134,10 @@
   // Join game (with flip animation)
   // -------------------------------------------------------------------
   async function handleJoinGame(gameId, btn) {
+    if (isEliminated()) {
+      showFeedback(els.createFeedback, 'You Lost! You cannot join games.', 'error');
+      return;
+    }
     if (state.isFlipping) return;
     state.isFlipping = true;
     setLoading(btn, true);
@@ -1134,8 +1189,8 @@
       // Heads = even number of half-turns (lands face up).
       // Tails = odd number of half-turns. Multiply by 360 for a clean
       // multi-rotation finish, then add 180 for tails.
-      const finalY = (result === 'heads') ? '1800deg' : '1980deg';
-      const dur    = Math.min(Number(CONFIG.DEFAULT_FLIP_DURATION_MS) || 2200, 2300);
+      const finalY = (result === 'heads') ? '2160deg' : '2340deg';
+      const dur    = Math.min(Number(CONFIG.DEFAULT_FLIP_DURATION_MS) || 2600, 2800);
 
       inner.style.setProperty('--final-y', finalY);
       inner.style.setProperty('--toss-duration', `${dur}ms`);
@@ -1161,12 +1216,14 @@
     const won       = (game.winner_id === myId);
     const wager     = Number(game.wager);
 
-    els.flipSub.textContent = won ? 'You won!' : 'You lost.';
+    const newBalance = data.user ? data.user.balance : data.balance;
+    const hitZero = !won && Number(newBalance) <= 0;
+
+    els.flipSub.textContent = won ? 'You won!' : (hitZero ? 'You Lost!' : 'You lost.');
     els.resultSide.textContent    = capitalize(game.result);
     els.resultPick.textContent    = capitalize(myPick);
-    els.resultOutcome.textContent = won ? 'You won' : 'You lost';
-    els.resultAmount.textContent  = won ? `+${formatMoney(wager * 2)}` : `−${formatMoney(wager)}`;
-    const newBalance = data.user ? data.user.balance : data.balance;
+    els.resultOutcome.textContent = won ? 'You won' : (hitZero ? 'You Lost!' : 'You lost');
+    els.resultAmount.textContent  = won ? `+${formatMoney(wager * 2)}` : (hitZero ? 'You Lost!' : `−${formatMoney(wager)}`);
     els.resultBalance.textContent = formatMoney(newBalance);
 
     // Color the result rows
@@ -1222,6 +1279,7 @@
     on(els.formLogin, 'submit', handleLogin);
     on(els.formSignup, 'submit', handleSignup);
     on(els.logoutBtn, 'click', handleLogout);
+    on(els.lostSignout, 'click', handleLogout);
     on(els.themeToggle, 'click', toggleTheme);
 
     // Create
