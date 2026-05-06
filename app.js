@@ -38,6 +38,9 @@
     bannerTimer:    null,
     seenCompletedIds: null,             // Set or null (null = not initialized)
     lastBannerGameId: null,
+    // null = we have not checked yet. This prevents showing the lost lockout
+    // while the user's whole balance is escrowed in an open game.
+    ownOpenGamesCount: null,
     theme:          localStorage.getItem(THEME_KEY) || 'dark',
   };
 
@@ -389,10 +392,20 @@
   // -------------------------------------------------------------------
   // Theme + wager limits
   // -------------------------------------------------------------------
+  function hasOwnOpenGames() {
+    return Number(state.ownOpenGamesCount) > 0;
+  }
+
   function isEliminated() {
     if (!state.user) return false;
     const balance = Number(state.user.balance);
-    return Number.isFinite(balance) && balance <= 0;
+
+    // Important: a $0 available balance does not always mean the player lost.
+    // The balance can be $0 because their money is reserved in an open game.
+    // Only lock them out after we know they have no open games left.
+    if (!Number.isFinite(balance) || balance > 0) return false;
+    if (state.ownOpenGamesCount === null) return false;
+    return !hasOwnOpenGames();
   }
 
   function applyEliminatedState() {
@@ -400,14 +413,8 @@
     document.body.classList.toggle('is-eliminated', lost);
     if (els.lostCard) els.lostCard.hidden = !lost;
 
-    const disabledControls = [
-      els.wagerInput,
-      els.createBtn,
-      ...(els.formCreateGame ? Array.from(els.formCreateGame.querySelectorAll('input[name="choice"]')) : []),
-    ];
-    disabledControls.forEach(control => {
-      if (control) control.disabled = lost;
-    });
+    // updateWagerLimitUI owns the create-form disabled state because a user can
+    // have $0 available while still having an open game in escrow.
 
     if (els.createFeedback && lost) {
       showFeedback(els.createFeedback, 'You Lost! You can still view games and the leaderboard, but you cannot create, join, or cancel games.', 'error');
@@ -443,14 +450,35 @@
     if (!els.wagerInput) return;
     const min = Number(CONFIG.MIN_WAGER) || 1;
     const max = getMaxAllowedWager();
+    const lost = isEliminated();
+    const unavailable = max < min;
+
     els.wagerInput.min = String(min);
     els.wagerInput.max = max >= min ? String(max) : String(min);
+
     if (max >= min) {
       els.wagerInput.placeholder = `${compactMoney(min)} - ${compactMoney(max)}`;
       if (els.wagerHint) els.wagerHint.textContent = `Allowed: ${compactMoney(min)} - ${compactMoney(max)}`;
-    } else {
+    } else if (lost) {
       els.wagerInput.placeholder = 'You Lost!';
       if (els.wagerHint) els.wagerHint.textContent = 'You Lost!';
+    } else if (hasOwnOpenGames()) {
+      els.wagerInput.placeholder = 'Balance reserved';
+      if (els.wagerHint) els.wagerHint.textContent = 'Your balance is reserved in an open game. Cancel it or wait for an opponent.';
+    } else {
+      els.wagerInput.placeholder = 'No balance available';
+      if (els.wagerHint) els.wagerHint.textContent = 'No balance available.';
+    }
+
+    // Do not allow creating a new game with $0 available balance, but do not
+    // show the full "You Lost" lockout while an open game still exists.
+    const createDisabled = lost || unavailable;
+    els.wagerInput.disabled = createDisabled;
+    if (els.createBtn) els.createBtn.disabled = createDisabled;
+    if (els.formCreateGame) {
+      els.formCreateGame.querySelectorAll('input[name="choice"]').forEach(input => {
+        input.disabled = createDisabled;
+      });
     }
   }
 
@@ -469,6 +497,7 @@
     state.user  = null;
     state.seenCompletedIds = null;
     state.lastBannerGameId = null;
+    state.ownOpenGamesCount = null;
     localStorage.removeItem(TOKEN_KEY);
     stopPolling();
     updateTopbar();
@@ -643,6 +672,15 @@
     try {
       const data = await api('/api/me');
       state.user = data.user;
+
+      // If the server reports $0, check open games before showing the lost state.
+      // Without this, a full-balance open wager looks like a loss even though it
+      // can still be cancelled or won.
+      const balance = Number(state.user?.balance);
+      if (Number.isFinite(balance) && balance <= 0) {
+        await refreshOwnOpenGamesCount();
+      }
+
       updateTopbar();
     } catch (err) {
       if (!(err instanceof ApiError) || err.status !== 401) {
@@ -672,6 +710,26 @@
   function stopPolling() {
     if (state.pollTimer) clearInterval(state.pollTimer);
     state.pollTimer = null;
+  }
+
+  async function refreshOwnOpenGamesCount() {
+    if (!state.user) {
+      state.ownOpenGamesCount = null;
+      return 0;
+    }
+
+    try {
+      const data = await api('/api/me/games?status=open&page=1&limit=1');
+      const count = Number(data.total);
+      state.ownOpenGamesCount = Number.isFinite(count) ? count : ((data.games || []).length);
+      return state.ownOpenGamesCount;
+    } catch (err) {
+      console.warn('[refreshOwnOpenGamesCount]', err);
+      // Keep the previous value if the check fails. If there is no previous
+      // value, stay unlocked instead of incorrectly declaring a loss.
+      if (state.ownOpenGamesCount === null) return 0;
+      return state.ownOpenGamesCount;
+    }
   }
 
   // -------------------------------------------------------------------
@@ -795,7 +853,14 @@
       const data = await api(`/api/me/games?page=${page}&limit=${limit}`);
       const games = data.games || [];
       const meta = normalizeMeta(data, games, page, limit);
-      if (!options.forNotification) {
+      if (options.forOpenCount || page === 1) {
+        const openOnPage = games.filter(g => g.status === 'open').length;
+        // When this request is explicitly status=open, total is the open-game count.
+        state.ownOpenGamesCount = options.forOpenCount ? meta.total : openOnPage;
+        updateWagerLimitUI();
+        applyEliminatedState();
+      }
+      if (!options.forNotification && !options.forOpenCount) {
         state.totals.my = meta.total;
         if (page > meta.totalPages && meta.totalPages > 0) {
           state.pages.my = meta.totalPages;
@@ -805,10 +870,10 @@
         setListLoading('my', false);
         renderMyGames(games);
         updatePager('my', meta);
-      } else if (state.activeMainTab === 'my' && page === state.pages.my) {
+      } else if (state.activeMainTab === 'my' && page === state.pages.my && !options.forOpenCount) {
         renderMyGames(games);
       }
-      processCompletionDetection(games);
+      if (!options.forOpenCount) processCompletionDetection(games);
     } catch (err) {
       console.warn('[refreshMyGames]', err);
       if (!options.silent && !options.forNotification) setListLoading('my', true, 'Could not load your games.', true);
@@ -1085,6 +1150,9 @@
       });
       if (data.user) {
         state.user = data.user;
+        // This newly-created game holds the wager in escrow, so a $0 balance
+        // here is not a loss.
+        state.ownOpenGamesCount = Math.max(1, Number(state.ownOpenGamesCount) || 0);
         updateTopbar();
       }
       els.wagerInput.value = '';
@@ -1115,6 +1183,7 @@
       const data = await api(`/api/games/${gameId}/cancel`, { method: 'POST' });
       if (data.user) {
         state.user = data.user;
+        await refreshOwnOpenGamesCount();
         updateTopbar();
       }
       showFeedback(els.createFeedback, 'Game cancelled and wager refunded.', 'success');
