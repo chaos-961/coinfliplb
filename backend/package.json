@@ -1,7 +1,7 @@
 {
   "name": "coinflip-arena-backend",
   "version": "1.0.0",
-  "description": "Backend API for CoinFlip Arena - a fake-money coinflip game.",
+  "description": "Backend API for Coinflip LB - a fake-money coinflip game.",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

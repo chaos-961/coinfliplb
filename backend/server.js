@@ -1,5 +1,5 @@
 // =====================================================================
-// server.js — CoinFlip Arena backend
+// server.js — Coinflip LB backend
 // ---------------------------------------------------------------------
 // This is the single source of truth for the game. The frontend is
 // purely a UI: every important decision (who wins a flip, what your
@@ -35,7 +35,7 @@ const db = require('./db');
 // ---------------------------------------------------------------------
 const PORT             = parseInt(process.env.PORT || '3000', 10);
 const JWT_SECRET       = process.env.JWT_SECRET || '';
-const STARTING_BALANCE = parseFloat(process.env.STARTING_BALANCE || '100');
+const STARTING_BALANCE = parseWagerInteger(process.env.STARTING_BALANCE || '100');
 const FRONTEND_ORIGIN  = process.env.FRONTEND_ORIGIN || '';
 const NODE_ENV         = process.env.NODE_ENV || 'development';
 
@@ -43,8 +43,13 @@ const MIN_PASSWORD_LENGTH = 6;
 const MAX_USERNAME_LENGTH = 32;
 const MIN_USERNAME_LENGTH = 3;
 const MIN_WAGER           = 1;
-const MAX_WAGER           = 10_000_000_000; // sanity cap; UI also caps to current balance
+const MAX_WAGER           = 10_000_000_000; // whole-dollar sanity cap
 const TOKEN_EXPIRES_IN    = '7d';
+
+if (!Number.isSafeInteger(STARTING_BALANCE) || STARTING_BALANCE < 0) {
+  console.error('[startup] STARTING_BALANCE must be a whole number >= 0.');
+  process.exit(1);
+}
 
 if (!JWT_SECRET || JWT_SECRET.length < 16) {
   console.error(
@@ -116,6 +121,26 @@ app.use('/api/', generalLimiter);
 // ---------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------
+
+function parseWagerInteger(value) {
+  const raw = String(value ?? '').trim();
+  if (!/^\d+$/.test(raw)) return NaN;
+  const n = Number(raw);
+  if (!Number.isSafeInteger(n)) return NaN;
+  return n;
+}
+
+function parsePage(value, fallback = 1) {
+  const n = parseInt(value, 10);
+  return Number.isInteger(n) && n > 0 ? n : fallback;
+}
+
+function parseLimit(value, fallback = 20, max = 50) {
+  const n = parseInt(value, 10);
+  if (!Number.isInteger(n) || n <= 0) return fallback;
+  return Math.min(n, max);
+}
+
 function signToken(user) {
   return jwt.sign(
     { uid: user.id, username: user.username },
@@ -128,7 +153,7 @@ function publicUser(row) {
   return {
     id: row.id,
     username: row.username,
-    balance: Number(row.balance),
+    balance: Math.floor(Number(row.balance)),
     created_at: row.created_at,
   };
 }
@@ -141,7 +166,7 @@ function publicGame(row) {
     creator_choice: row.creator_choice,
     joiner_id: row.joiner_id,
     joiner_username: row.joiner_username || null,
-    wager: Number(row.wager),
+    wager: Math.floor(Number(row.wager)),
     result: row.result,
     winner_id: row.winner_id,
     winner_username: row.winner_username || null,
@@ -292,40 +317,59 @@ app.get('/api/me', requireAuth, async (req, res) => {
 });
 
 // ----- POST /api/games (create) --------------------------------------
+// Creates an open game and reserves the creator's wager immediately.
+// This prevents a user with $60 from creating multiple $50 games.
 app.post('/api/games', requireAuth, async (req, res) => {
+  const choice = req.body?.choice;
+  const wager  = parseWagerInteger(req.body?.wager);
+
+  if (choice !== 'heads' && choice !== 'tails') {
+    return res.status(400).json({ error: 'Choice must be "heads" or "tails".' });
+  }
+  if (!Number.isSafeInteger(wager) || wager < MIN_WAGER || wager > MAX_WAGER) {
+    return res.status(400).json({
+      error: `Wager must be a whole number between ${MIN_WAGER} and ${MAX_WAGER}.`
+    });
+  }
+
+  const client = await db.getClient();
   try {
-    const choice = req.body?.choice;
-    const wager  = Number(req.body?.wager);
+    await client.query('BEGIN');
 
-    if (choice !== 'heads' && choice !== 'tails') {
-      return res.status(400).json({ error: 'Choice must be "heads" or "tails".' });
-    }
-    if (!Number.isFinite(wager) || wager < MIN_WAGER || wager > MAX_WAGER) {
-      return res.status(400).json({
-        error: `Wager must be a number between ${MIN_WAGER} and ${MAX_WAGER}.`
-      });
-    }
-
-    // We round to 2 decimals so the UI can't sneak in fractional cents.
-    const safeWager = Math.round(wager * 100) / 100;
-
-    // Check the latest balance directly from the DB; never trust the client.
-    const me = await db.query('SELECT balance FROM users WHERE id = $1', [req.user.id]);
+    const me = await client.query(
+      'SELECT id, username, balance, created_at FROM users WHERE id = $1 FOR UPDATE',
+      [req.user.id]
+    );
     if (me.rowCount === 0) {
+      await client.query('ROLLBACK');
       return res.status(404).json({ error: 'Account no longer exists.' });
     }
-    if (Number(me.rows[0].balance) < safeWager) {
+    if (Number(me.rows[0].balance) < wager) {
+      await client.query('ROLLBACK');
       return res.status(400).json({ error: 'You do not have enough balance for that wager.' });
     }
 
-    const insert = await db.query(
+    const updatedUser = await client.query(
+      `UPDATE users
+          SET balance = balance - $1
+        WHERE id = $2 AND balance >= $1
+        RETURNING id, username, balance, created_at`,
+      [wager, req.user.id]
+    );
+    if (updatedUser.rowCount === 0) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ error: 'Your balance changed. Please try again.' });
+    }
+
+    const insert = await client.query(
       `INSERT INTO games (creator_id, creator_choice, wager, status)
        VALUES ($1, $2, $3, 'open')
        RETURNING id, creator_id, creator_choice, wager, status, created_at`,
-      [req.user.id, choice, safeWager]
+      [req.user.id, choice, wager]
     );
 
-    // Hydrate creator_username for the response.
+    await client.query('COMMIT');
+
     const row = insert.rows[0];
     return res.status(201).json({
       game: publicGame({
@@ -334,12 +378,16 @@ app.post('/api/games', requireAuth, async (req, res) => {
         joiner_id: null, joiner_username: null,
         result: null, winner_id: null, winner_username: null,
         completed_at: null,
-      })
+      }),
+      user: publicUser(updatedUser.rows[0]),
     });
 
   } catch (err) {
+    try { await client.query('ROLLBACK'); } catch {}
     console.error('[create game]', err);
     return res.status(500).json({ error: 'Could not create game. Please try again.' });
+  } finally {
+    client.release();
   }
 });
 
@@ -347,9 +395,12 @@ app.post('/api/games', requireAuth, async (req, res) => {
 app.get('/api/games', requireAuth, async (req, res) => {
   try {
     const status    = (req.query.status || 'open').toString();
-    const wager     = req.query.wager     !== undefined ? Number(req.query.wager)    : null;
-    const minWager  = req.query.minWager  !== undefined ? Number(req.query.minWager) : null;
-    const maxWager  = req.query.maxWager  !== undefined ? Number(req.query.maxWager) : null;
+    const wager     = req.query.wager     !== undefined ? parseWagerInteger(req.query.wager)    : null;
+    const minWager  = req.query.minWager  !== undefined ? parseWagerInteger(req.query.minWager) : null;
+    const maxWager  = req.query.maxWager  !== undefined ? parseWagerInteger(req.query.maxWager) : null;
+    const page      = parsePage(req.query.page, 1);
+    const limit     = parseLimit(req.query.limit, 20, 50);
+    const offset    = (page - 1) * limit;
 
     if (!['open', 'completed', 'cancelled'].includes(status)) {
       return res.status(400).json({ error: 'Invalid status filter.' });
@@ -359,18 +410,22 @@ app.get('/api/games', requireAuth, async (req, res) => {
     const params     = [status];
     let p = 2;
 
-    if (wager !== null && Number.isFinite(wager)) {
+    if (wager !== null && Number.isSafeInteger(wager)) {
       conditions.push(`g.wager = $${p++}`);
       params.push(wager);
     }
-    if (minWager !== null && Number.isFinite(minWager)) {
+    if (minWager !== null && Number.isSafeInteger(minWager)) {
       conditions.push(`g.wager >= $${p++}`);
       params.push(minWager);
     }
-    if (maxWager !== null && Number.isFinite(maxWager)) {
+    if (maxWager !== null && Number.isSafeInteger(maxWager)) {
       conditions.push(`g.wager <= $${p++}`);
       params.push(maxWager);
     }
+
+    const where = conditions.join(' AND ');
+    const countRes = await db.query(`SELECT COUNT(*)::int AS total FROM games g WHERE ${where}`, params);
+    const total = Number(countRes.rows[0]?.total || 0);
 
     const sql = `
       SELECT g.id, g.creator_id, u.username AS creator_username,
@@ -378,12 +433,18 @@ app.get('/api/games', requireAuth, async (req, res) => {
              g.joiner_id, g.result, g.winner_id, g.completed_at
       FROM games g
       JOIN users u ON u.id = g.creator_id
-      WHERE ${conditions.join(' AND ')}
+      WHERE ${where}
       ORDER BY g.created_at DESC
-      LIMIT 200
+      LIMIT $${p++} OFFSET $${p++}
     `;
-    const result = await db.query(sql, params);
-    return res.json({ games: result.rows.map(publicGame) });
+    const result = await db.query(sql, [...params, limit, offset]);
+    return res.json({
+      games: result.rows.map(publicGame),
+      page,
+      limit,
+      total,
+      totalPages: Math.max(1, Math.ceil(total / limit)),
+    });
 
   } catch (err) {
     console.error('[list games]', err);
@@ -422,18 +483,64 @@ app.get('/api/games/:id', requireAuth, async (req, res) => {
   }
 });
 
+// ----- POST /api/games/:id/cancel ------------------------------------
+// Cancels an open game created by the current user and refunds escrow.
+app.post('/api/games/:id/cancel', requireAuth, async (req, res) => {
+  const gameId = parseInt(req.params.id, 10);
+  if (!Number.isInteger(gameId) || gameId <= 0) {
+    return res.status(400).json({ error: 'Invalid game id.' });
+  }
+
+  const client = await db.getClient();
+  try {
+    await client.query('BEGIN');
+
+    const gameRes = await client.query('SELECT * FROM games WHERE id = $1 FOR UPDATE', [gameId]);
+    if (gameRes.rowCount === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Game not found.' });
+    }
+    const game = gameRes.rows[0];
+
+    if (game.creator_id !== req.user.id) {
+      await client.query('ROLLBACK');
+      return res.status(403).json({ error: 'You can only cancel your own open games.' });
+    }
+    if (game.status !== 'open') {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ error: 'This game is no longer open.' });
+    }
+
+    await client.query(
+      `UPDATE games
+          SET status = 'cancelled', completed_at = NOW()
+        WHERE id = $1`,
+      [game.id]
+    );
+
+    const userRes = await client.query(
+      `UPDATE users
+          SET balance = balance + $1
+        WHERE id = $2
+        RETURNING id, username, balance, created_at`,
+      [game.wager, req.user.id]
+    );
+
+    await client.query('COMMIT');
+    return res.json({ ok: true, user: publicUser(userRes.rows[0]) });
+
+  } catch (err) {
+    try { await client.query('ROLLBACK'); } catch {}
+    console.error('[cancel game]', err);
+    return res.status(500).json({ error: 'Could not cancel the game. Please try again.' });
+  } finally {
+    client.release();
+  }
+});
+
 // ----- POST /api/games/:id/join --------------------------------------
-//
-// This is the most security-sensitive endpoint. It must:
-//   1. Lock the game row so two players can't join the same game.
-//   2. Lock both player rows so balances can't be raced.
-//   3. Re-check both balances inside the transaction.
-//   4. Generate the flip result server-side with a CSPRNG.
-//   5. Update both balances and mark the game completed atomically.
-//
-// We do everything inside a single transaction; if any step fails we
-// roll back so no partial state is ever written.
-// ---------------------------------------------------------------------
+// The creator's wager is already in escrow. Joining deducts the joiner's
+// wager, flips server-side, then pays the full pot (2x wager) to winner.
 app.post('/api/games/:id/join', requireAuth, async (req, res) => {
   const gameId = parseInt(req.params.id, 10);
   if (!Number.isInteger(gameId) || gameId <= 0) {
@@ -444,13 +551,7 @@ app.post('/api/games/:id/join', requireAuth, async (req, res) => {
   try {
     await client.query('BEGIN');
 
-    // 1) Lock the game row (FOR UPDATE) so a second concurrent joiner
-    //    blocks here until we are done. This is what prevents two
-    //    players from both joining the same open game.
-    const gameRes = await client.query(
-      'SELECT * FROM games WHERE id = $1 FOR UPDATE',
-      [gameId]
-    );
+    const gameRes = await client.query('SELECT * FROM games WHERE id = $1 FOR UPDATE', [gameId]);
     if (gameRes.rowCount === 0) {
       await client.query('ROLLBACK');
       return res.status(404).json({ error: 'Game not found.' });
@@ -466,60 +567,50 @@ app.post('/api/games/:id/join', requireAuth, async (req, res) => {
       return res.status(400).json({ error: 'You cannot join your own game.' });
     }
 
-    // 2) Lock both user rows. We acquire them in a deterministic order
-    //    (smallest id first) so two simultaneous joins on different
-    //    games involving the same user can never deadlock.
-    const lowId  = Math.min(game.creator_id, req.user.id);
-    const highId = Math.max(game.creator_id, req.user.id);
-    const usersRes = await client.query(
-      `SELECT id, username, balance
-         FROM users
-        WHERE id IN ($1, $2)
-        ORDER BY id ASC
-        FOR UPDATE`,
-      [lowId, highId]
-    );
-    const usersById = Object.fromEntries(usersRes.rows.map(r => [r.id, r]));
-    const creator = usersById[game.creator_id];
-    const joiner  = usersById[req.user.id];
-
-    if (!creator || !joiner) {
-      await client.query('ROLLBACK');
-      return res.status(404).json({ error: 'A player no longer exists.' });
-    }
-
     const wager = Number(game.wager);
+    const joinerRes = await client.query(
+      'SELECT id, username, balance FROM users WHERE id = $1 FOR UPDATE',
+      [req.user.id]
+    );
+    if (joinerRes.rowCount === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Account no longer exists.' });
+    }
+    const joiner = joinerRes.rows[0];
     if (Number(joiner.balance) < wager) {
       await client.query('ROLLBACK');
       return res.status(400).json({ error: 'You do not have enough balance to join this game.' });
     }
-    if (Number(creator.balance) < wager) {
-      // Creator went broke between creating and now. Cancel the game.
+
+    const creatorRes = await client.query(
+      'SELECT id, username FROM users WHERE id = $1 FOR UPDATE',
+      [game.creator_id]
+    );
+    if (creatorRes.rowCount === 0) {
       await client.query(
         `UPDATE games SET status = 'cancelled', completed_at = NOW() WHERE id = $1`,
         [game.id]
       );
       await client.query('COMMIT');
-      return res.status(409).json({ error: 'The game creator no longer has enough balance. Game cancelled.' });
+      return res.status(409).json({ error: 'The game creator no longer exists. Game cancelled.' });
     }
+    const creator = creatorRes.rows[0];
 
-    // 3) Server-side flip. The frontend NEVER decides this.
     const result = secureCoinFlip();
     const winnerId = (game.creator_choice === result) ? creator.id : joiner.id;
-    const loserId  = (winnerId === creator.id) ? joiner.id : creator.id;
+    const pot = wager * 2;
 
-    // 4) Move the wager from loser to winner. Two updates so a stray
-    //    race could never let the loser go negative.
-    await client.query(
+    const debitJoiner = await client.query(
       'UPDATE users SET balance = balance - $1 WHERE id = $2 AND balance >= $1',
-      [wager, loserId]
+      [wager, joiner.id]
     );
-    await client.query(
-      'UPDATE users SET balance = balance + $1 WHERE id = $2',
-      [wager, winnerId]
-    );
+    if (debitJoiner.rowCount === 0) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ error: 'Your balance changed. Please try again.' });
+    }
 
-    // 5) Finalize the game.
+    await client.query('UPDATE users SET balance = balance + $1 WHERE id = $2', [pot, winnerId]);
+
     await client.query(
       `UPDATE games
           SET joiner_id = $1, result = $2, winner_id = $3,
@@ -530,8 +621,6 @@ app.post('/api/games/:id/join', requireAuth, async (req, res) => {
 
     await client.query('COMMIT');
 
-    // Re-read the joined game with usernames so the client can render
-    // the result without another round-trip.
     const finalRes = await db.query(
       `SELECT g.*,
               uc.username AS creator_username,
@@ -545,7 +634,6 @@ app.post('/api/games/:id/join', requireAuth, async (req, res) => {
       [game.id]
     );
 
-    // Also return the joiner's fresh user record so the UI can update.
     const userRes = await db.query(
       'SELECT id, username, balance, created_at FROM users WHERE id = $1',
       [req.user.id]
@@ -554,8 +642,7 @@ app.post('/api/games/:id/join', requireAuth, async (req, res) => {
     return res.json({
       game: publicGame(finalRes.rows[0]),
       user: publicUser(userRes.rows[0]),
-      // Kept for compatibility with older frontend builds.
-      balance: Number(userRes.rows[0].balance),
+      balance: Math.floor(Number(userRes.rows[0].balance)),
     });
 
   } catch (err) {
@@ -568,13 +655,12 @@ app.post('/api/games/:id/join', requireAuth, async (req, res) => {
 });
 
 // ----- GET /api/me/games ---------------------------------------------
-// Returns the current user's games (as creator OR joiner), most recent
-// first. Used by the My Games tab and by the polling logic that detects
-// when one of the user's open games has been joined and completed.
 app.get('/api/me/games', requireAuth, async (req, res) => {
   try {
     const status = req.query.status ? String(req.query.status) : null;
-    const limit  = Math.min(Math.max(parseInt(req.query.limit, 10) || 20, 1), 100);
+    const page   = parsePage(req.query.page, 1);
+    const limit  = parseLimit(req.query.limit, 20, 50);
+    const offset = (page - 1) * limit;
 
     if (status && !['open', 'completed', 'cancelled'].includes(status)) {
       return res.status(400).json({ error: 'Invalid status filter.' });
@@ -586,6 +672,9 @@ app.get('/api/me/games', requireAuth, async (req, res) => {
       conditions.push(`g.status = $${params.length + 1}`);
       params.push(status);
     }
+    const where = conditions.join(' AND ');
+    const countRes = await db.query(`SELECT COUNT(*)::int AS total FROM games g WHERE ${where}`, params);
+    const total = Number(countRes.rows[0]?.total || 0);
 
     const sql = `
       SELECT g.id, g.creator_id, g.creator_choice, g.wager, g.status,
@@ -597,12 +686,18 @@ app.get('/api/me/games', requireAuth, async (req, res) => {
         JOIN users cu ON cu.id = g.creator_id
         LEFT JOIN users ju ON ju.id = g.joiner_id
         LEFT JOIN users wu ON wu.id = g.winner_id
-       WHERE ${conditions.join(' AND ')}
+       WHERE ${where}
        ORDER BY COALESCE(g.completed_at, g.created_at) DESC
-       LIMIT ${limit}
+       LIMIT $${params.length + 1} OFFSET $${params.length + 2}
     `;
-    const result = await db.query(sql, params);
-    return res.json({ games: result.rows.map(publicGame) });
+    const result = await db.query(sql, [...params, limit, offset]);
+    return res.json({
+      games: result.rows.map(publicGame),
+      page,
+      limit,
+      total,
+      totalPages: Math.max(1, Math.ceil(total / limit)),
+    });
   } catch (err) {
     console.error('[my games]', err);
     return res.status(500).json({ error: 'Could not load your games.' });
@@ -610,19 +705,32 @@ app.get('/api/me/games', requireAuth, async (req, res) => {
 });
 
 // ----- GET /api/leaderboard ------------------------------------------
-app.get('/api/leaderboard', requireAuth, async (_req, res) => {
+app.get('/api/leaderboard', requireAuth, async (req, res) => {
   try {
+    const page = parsePage(req.query.page, 1);
+    const limit = parseLimit(req.query.limit, 20, 20);
+    const cappedTotalRes = await db.query('SELECT LEAST(COUNT(*)::int, 100) AS total FROM users');
+    const total = Number(cappedTotalRes.rows[0]?.total || 0);
+    const totalPages = Math.max(1, Math.ceil(total / limit));
+    const safePage = Math.min(page, totalPages);
+    const offset = (safePage - 1) * limit;
+
     const result = await db.query(
       `SELECT id, username, balance, created_at
          FROM users
         ORDER BY balance DESC, created_at ASC
-        LIMIT 50`
+        LIMIT $1 OFFSET $2`,
+      [limit, offset]
     );
     return res.json({
       users: result.rows.map((r, i) => ({
-        rank: i + 1,
+        rank: offset + i + 1,
         ...publicUser(r),
       })),
+      page: safePage,
+      limit,
+      total,
+      totalPages,
     });
   } catch (err) {
     console.error('[leaderboard]', err);
@@ -648,7 +756,7 @@ app.use((err, _req, res, _next) => {
 // ---------------------------------------------------------------------
 if (require.main === module) {
   app.listen(PORT, () => {
-    console.log(`[startup] CoinFlip Arena API listening on :${PORT} (${NODE_ENV})`);
+    console.log(`[startup] Coinflip LB API listening on :${PORT} (${NODE_ENV})`);
     console.log(`[startup] STARTING_BALANCE = ${STARTING_BALANCE}`);
     console.log(`[startup] FRONTEND_ORIGIN  = ${FRONTEND_ORIGIN || '(none set — only localhost allowed)'}`);
   });

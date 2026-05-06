@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#0a0d18" />
   <meta name="description" content="A friendly fake-money coinflip arena. Play with friends, climb the leaderboard. No real money." />
-  <title>CoinFlip LB</title>
+  <title>Coinflip LB</title>
 
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3CradialGradient id='g' cx='30%25' cy='30%25'%3E%3Cstop offset='0' stop-color='%23ffe084'/%3E%3Cstop offset='0.6' stop-color='%23f5b301'/%3E%3Cstop offset='1' stop-color='%23a87a00'/%3E%3C/radialGradient%3E%3C/defs%3E%3Ccircle cx='32' cy='32' r='28' fill='url(%23g)' stroke='%236e5000' stroke-width='2'/%3E%3Ctext x='32' y='42' font-family='system-ui,sans-serif' font-size='28' font-weight='800' text-anchor='middle' fill='%236e5000'%3E%24%3C/text%3E%3C/svg%3E" />
 
@@ -27,7 +27,7 @@
 
   <!-- Topbar appears only after sign-in -->
   <header class="topbar" id="topbar" hidden>
-    <a class="brand" href="#" data-action="goto-app" aria-label="CoinFlip LB home">
+    <a class="brand" href="#" data-action="goto-app" aria-label="Coinflip LB home">
       <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true">
         <defs>
           <radialGradient id="brandG" cx="35%" cy="30%">
@@ -38,7 +38,7 @@
         </defs>
         <circle cx="16" cy="16" r="14" fill="url(#brandG)" stroke="#5e4400" stroke-width="1.5" />
       </svg>
-      <span class="brand-text" id="brand-name">CoinFlip LB</span>
+      <span class="brand-text" id="brand-name">Coinflip LB</span>
     </a>
     <div class="topbar-right">
       <div class="balance-pill" id="balance-pill" hidden>
@@ -65,7 +65,7 @@
           </div>
         </div>
 
-        <h1 class="auth-title">CoinFlip LB</h1>
+        <h1 class="auth-title">Coinflip LB</h1>
         <p class="auth-subtitle">A friendly fake-money coinflip arena. Pick a side, place your wager, take the lead on the board.</p>
 
         <div class="tabs auth-tabs" role="tablist">
@@ -203,10 +203,11 @@
             <div class="prefix-input">
               <span class="prefix">$</span>
               <input
-                type="number"
+                type="text"
                 id="wager-input"
                 name="wager"
-                inputmode="decimal"
+                inputmode="numeric"
+                pattern="[0-9]*"
                 min="1"
                 step="1"
                 placeholder="$1 - your balance"
@@ -239,14 +240,14 @@
               <span class="filter-label">Min</span>
               <div class="prefix-input prefix-input-sm">
                 <span class="prefix">$</span>
-                <input type="number" id="filter-min" min="0" step="1" placeholder="any" inputmode="numeric" />
+                <input type="text" id="filter-min" min="0" step="1" placeholder="any" inputmode="numeric" pattern="[0-9]*" />
               </div>
             </label>
             <label class="filter">
               <span class="filter-label">Max</span>
               <div class="prefix-input prefix-input-sm">
                 <span class="prefix">$</span>
-                <input type="number" id="filter-max" min="0" step="1" placeholder="any" inputmode="numeric" />
+                <input type="text" id="filter-max" min="0" step="1" placeholder="any" inputmode="numeric" pattern="[0-9]*" />
               </div>
             </label>
             <button type="button" class="btn btn-ghost btn-sm" id="apply-filters">Apply</button>
@@ -260,6 +261,11 @@
           No open games right now. Be the first — create one above.
         </div>
         <div class="loading-row" id="games-loading">Loading open games…</div>
+        <div class="pager" id="games-pager" hidden>
+          <button type="button" class="btn btn-ghost btn-sm" id="games-prev">← Previous</button>
+          <span class="pager-info" id="games-page-info">Page 1</span>
+          <button type="button" class="btn btn-ghost btn-sm" id="games-next">Next →</button>
+        </div>
       </div>
 
       <!-- Tab panel: my games -->
@@ -273,22 +279,32 @@
           You haven't played a game yet. Create one above to get started.
         </div>
         <div class="loading-row" id="my-loading" hidden>Loading your games…</div>
+        <div class="pager" id="my-pager" hidden>
+          <button type="button" class="btn btn-ghost btn-sm" id="my-prev">← Previous</button>
+          <span class="pager-info" id="my-page-info">Page 1</span>
+          <button type="button" class="btn btn-ghost btn-sm" id="my-next">Next →</button>
+        </div>
       </div>
 
       <!-- Tab panel: leaderboard -->
       <div class="tab-panel" id="panel-leaderboard" role="tabpanel" hidden>
         <div class="panel-toolbar">
-          <div class="panel-info">Top 50 players by balance.</div>
+          <div class="panel-info">Top 100 players by balance. Showing 20 per page.</div>
           <button type="button" class="btn btn-ghost btn-sm" id="refresh-lb" aria-label="Refresh">↻ Refresh</button>
         </div>
         <div class="rows leaderboard-rows" id="lb-rows"></div>
         <div class="empty-state" id="lb-empty" hidden>No players yet.</div>
         <div class="loading-row" id="lb-loading" hidden>Loading leaderboard…</div>
+        <div class="pager" id="lb-pager" hidden>
+          <button type="button" class="btn btn-ghost btn-sm" id="lb-prev">← Previous</button>
+          <span class="pager-info" id="lb-page-info">Page 1</span>
+          <button type="button" class="btn btn-ghost btn-sm" id="lb-next">Next →</button>
+        </div>
       </div>
     </section>
   </main>
 
-  <footer class="app-footer" aria-label="Version">v0.4</footer>
+  <footer class="app-footer" aria-label="Version">v0.5</footer>
 
   <!-- =============================================================== -->
   <!-- FLIP MODAL -->
@@ -355,6 +371,7 @@
       <div class="my-row-detail"></div>
       <div class="my-row-amount"></div>
       <div class="my-row-time"></div>
+      <button type="button" class="btn btn-ghost btn-sm my-row-cancel" hidden>Cancel</button>
     </div>
   </template>
 

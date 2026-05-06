@@ -1,5 +1,5 @@
 /* =====================================================================
-   CoinFlip LB — config.js
+   Coinflip LB — config.js
    ---------------------------------------------------------------------
    Non-secret display / behavioural constants. Loaded BEFORE app.js.
    Exposed as window.CONFIG.
@@ -13,7 +13,7 @@ window.CONFIG = Object.freeze({
   API_BASE_URL: "https://coinfliplb-production.up.railway.app",
 
   // ----- Branding ----------------------------------------------------
-  APP_NAME: "CoinFlip LB",
+  APP_NAME: "Coinflip LB",
 
   // ----- Account defaults --------------------------------------------
   // Display value only. The backend env var STARTING_BALANCE is the
@@ -33,5 +33,5 @@ window.CONFIG = Object.freeze({
   // ----- Polling -----------------------------------------------------
   // How often the dashboard refreshes data (open games + your games).
   // Pauses while the tab is hidden or while a flip is animating.
-  POLLING_INTERVAL_MS: 3000,
+  POLLING_INTERVAL_MS: 5000,
 });

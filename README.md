@@ -1,4 +1,4 @@
-# CoinFlip Arena
+# Coinflip LB
 
 A clean, full-stack **fake-money** coinflip game. Players sign up, get $100 of play money, create heads/tails wagers, and watch a fair, server-decided coin flip animation. Pure-fun MVP — no real money, no crypto, no gambling integrations.
 
@@ -6,7 +6,7 @@ A clean, full-stack **fake-money** coinflip game. Players sign up, get $100 of p
 
 ## 1. What this project is
 
-CoinFlip Arena is a tiny social game:
+Coinflip LB is a tiny social game:
 
 1. You make an account → you start with $100 fake balance.
 2. You create a game by picking heads or tails and a wager amount.
@@ -178,7 +178,7 @@ GitHub Pages can serve from a subfolder of your repo:
 2. Under **Build and deployment**, set **Source** to **Deploy from a branch**.
 3. Set **Branch** to `main` and the folder to `/frontend` (then **Save**).
 4. Wait ~1 minute. GitHub will give you a URL like `https://yourusername.github.io/coinflip-arena/`.
-5. Visit it. You should see the CoinFlip Arena landing page.
+5. Visit it. You should see the Coinflip LB landing page.
 
 ## 15. How to set FRONTEND_ORIGIN in Railway
 
@@ -249,7 +249,7 @@ The backend value is what's actually given to new users. The frontend value is j
 `frontend/config.js` → `MIN_WAGER` and `MAX_WAGER`. The backend currently only enforces "wager > 0 and ≤ your balance" — these client-side limits are for UX. If you want the backend to enforce a max too, edit the validation in `backend/server.js` inside the `POST /api/games` handler.
 
 **App name**
-`frontend/config.js` → `APP_NAME: "CoinFlip Arena"`. Shown in the topbar and landing hero.
+`frontend/config.js` → `APP_NAME: "Coinflip LB"`. Shown in the topbar and landing hero.
 
 **Polling interval**
 `frontend/config.js` → `POLLING_INTERVAL_MS: 3000` — how often the dashboard refreshes the open games list. Polling pauses when the tab isn't visible.

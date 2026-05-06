@@ -1,5 +1,5 @@
 /* =====================================================================
-   CoinFlip LB — app.js
+   Coinflip LB — app.js
    ---------------------------------------------------------------------
    Single-file SPA logic. No frameworks.
    - Inline feedback (no toast popups)
@@ -29,8 +29,13 @@
     activeAuthTab:  'login',
     activeMainTab:  'lobby',
     filters:        {},                // { minWager, maxWager }
+    pages:          { lobby: 1, my: 1, leaderboard: 1 },
+    totals:         { lobby: 0, my: 0, leaderboard: 0 },
+    pageSize:       { lobby: 20, my: 20, leaderboard: 20 },
     isFlipping:     false,
     pollTimer:      null,
+    pollTick:       0,
+    bannerTimer:    null,
     seenCompletedIds: null,             // Set or null (null = not initialized)
     lastBannerGameId: null,
     theme:          localStorage.getItem(THEME_KEY) || 'dark',
@@ -65,8 +70,11 @@
       'formCreateGame', 'wagerInput', 'wagerHint', 'createBtn', 'createFeedback',
       'gamesRows', 'gamesEmpty', 'gamesLoading', 'filterMin', 'filterMax',
       'applyFilters', 'clearFilters', 'refreshGames',
+      'gamesPager', 'gamesPrev', 'gamesNext', 'gamesPageInfo',
       'myRows', 'myEmpty', 'myLoading', 'refreshMy',
+      'myPager', 'myPrev', 'myNext', 'myPageInfo',
       'lbRows', 'lbEmpty', 'lbLoading', 'refreshLb',
+      'lbPager', 'lbPrev', 'lbNext', 'lbPageInfo',
       'flipModal', 'flipCoin', 'flipCoinInner', 'flipSub', 'flipResult',
       'resultSide', 'resultPick', 'resultOutcome', 'resultAmount', 'resultBalance',
       'flipCloseBtn', 'tplGameRow', 'tplMyRow', 'tplLbRow',
@@ -140,18 +148,30 @@
       applyFilters: $('#apply-filters'),
       clearFilters: $('#clear-filters'),
       refreshGames: $('#refresh-games'),
+      gamesPager:  $('#games-pager'),
+      gamesPrev:   $('#games-prev'),
+      gamesNext:   $('#games-next'),
+      gamesPageInfo: $('#games-page-info'),
 
       // My panel
       myRows:    $('#my-rows'),
       myEmpty:   $('#my-empty'),
       myLoading: $('#my-loading'),
       refreshMy: $('#refresh-my'),
+      myPager:  $('#my-pager'),
+      myPrev:   $('#my-prev'),
+      myNext:   $('#my-next'),
+      myPageInfo: $('#my-page-info'),
 
       // Leaderboard panel
       lbRows:    $('#lb-rows'),
       lbEmpty:   $('#lb-empty'),
       lbLoading: $('#lb-loading'),
       refreshLb: $('#refresh-lb'),
+      lbPager:  $('#lb-pager'),
+      lbPrev:   $('#lb-prev'),
+      lbNext:   $('#lb-next'),
+      lbPageInfo: $('#lb-page-info'),
 
       // Flip modal
       flipModal:     $('#flip-modal'),
@@ -266,8 +286,8 @@
   // Formatting
   // -------------------------------------------------------------------
   function formatMoney(value) {
-    const n = Number(value || 0);
-    return n.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const n = Math.floor(Number(value || 0));
+    return n.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0, maximumFractionDigits: 0 });
   }
   function formatRelative(dateInput) {
     if (!dateInput) return '';
@@ -287,7 +307,48 @@
   function capitalize(s) { return s ? s.charAt(0).toUpperCase() + s.slice(1) : s; }
   function compactMoney(value) {
     const n = Number(value || 0);
-    return n.toLocaleString('en-US', { maximumFractionDigits: 2 });
+    return Math.floor(n).toLocaleString('en-US', { maximumFractionDigits: 0 });
+  }
+
+  function parseWholeDollars(value) {
+    const raw = String(value ?? '').replace(/,/g, '').trim();
+    if (!/^\d+$/.test(raw)) return null;
+    const n = Number(raw);
+    if (!Number.isSafeInteger(n)) return null;
+    return n;
+  }
+
+  function sanitizeIntegerInput(input, { clampMax = false } = {}) {
+    if (!input) return;
+    const cleaned = String(input.value || '').replace(/[^0-9]/g, '');
+    if (input.value !== cleaned) input.value = cleaned;
+    if (clampMax && cleaned) {
+      const max = Math.floor(getMaxAllowedWager());
+      const current = Number(cleaned);
+      if (Number.isSafeInteger(current) && max > 0 && current > max) {
+        input.value = String(max);
+      }
+    }
+  }
+
+  function normalizeMeta(data, list, page, limit) {
+    const total = Number.isFinite(Number(data.total)) ? Number(data.total) : list.length;
+    const totalPages = Number.isFinite(Number(data.totalPages)) ? Number(data.totalPages) : Math.max(1, Math.ceil(total / limit));
+    return { total, totalPages: Math.max(1, totalPages), page: Number(data.page) || page, limit };
+  }
+
+  function updatePager(prefix, meta) {
+    const pager = els[`${prefix}Pager`];
+    const prev = els[`${prefix}Prev`];
+    const next = els[`${prefix}Next`];
+    const info = els[`${prefix}PageInfo`];
+    if (!pager || !prev || !next || !info) return;
+    const totalPages = Math.max(1, Number(meta.totalPages) || 1);
+    const page = Math.min(Math.max(1, Number(meta.page) || 1), totalPages);
+    pager.hidden = totalPages <= 1;
+    prev.disabled = page <= 1;
+    next.disabled = page >= totalPages;
+    info.textContent = `Page ${page} of ${totalPages}`;
   }
 
   // -------------------------------------------------------------------
@@ -505,12 +566,11 @@
     // Reset completion tracking for this session
     state.seenCompletedIds = null;
 
-    // Initial parallel fetch (don't fail the whole boot if one fails)
+    // Initial fetches: lobby is already refreshed by switchMainTab.
+    // Keep this light so mobile devices do not feel laggy on sign-in.
     await Promise.allSettled([
       refreshMe(),
-      refreshOpenGames(),
       refreshMyGames(),
-      refreshLeaderboard(),
     ]);
     startPolling();
   }
@@ -530,14 +590,20 @@
   function startPolling() {
     stopPolling();
     state.pollTimer = setInterval(() => {
-      if (document.hidden || state.isFlipping) return;
-      // Always refresh open games; my games is needed for completion detection.
-      // Leaderboard is heavier so it only refreshes on tab activation / manual click.
-      refreshOpenGames().catch(() => {});
-      refreshMyGames().catch(() => {});
-      // Light refresh of "me" so the balance pill stays current
-      refreshMe().catch(() => {});
-    }, Math.max(2000, Number(CONFIG.POLLING_INTERVAL_MS) || 3000));
+      if (document.hidden || state.isFlipping || !state.user) return;
+      state.pollTick += 1;
+
+      // My games is the lightweight notification feed, so keep it fresh.
+      refreshMyGames({ silent: true, forNotification: true }).catch(() => {});
+
+      // Only refresh the visible heavy list. This keeps phones smoother and
+      // avoids unnecessary requests as the app grows.
+      if (state.activeMainTab === 'lobby') refreshOpenGames({ silent: true }).catch(() => {});
+      if (state.activeMainTab === 'leaderboard' && state.pollTick % 6 === 0) refreshLeaderboard({ silent: true }).catch(() => {});
+
+      // Balance changes only after actions/completions; this is just a backup.
+      if (state.pollTick % 3 === 0) refreshMe().catch(() => {});
+    }, Math.max(4000, Number(CONFIG.POLLING_INTERVAL_MS) || 5000));
   }
   function stopPolling() {
     if (state.pollTimer) clearInterval(state.pollTimer);
@@ -547,18 +613,35 @@
   // -------------------------------------------------------------------
   // Open games panel
   // -------------------------------------------------------------------
-  async function refreshOpenGames() {
+  async function refreshOpenGames(options = {}) {
+    const page = state.pages.lobby;
+    const limit = state.pageSize.lobby;
     const params = new URLSearchParams();
     params.set('status', 'open');
+    params.set('page', String(page));
+    params.set('limit', String(limit));
     if (state.filters.minWager != null) params.set('minWager', state.filters.minWager);
     if (state.filters.maxWager != null) params.set('maxWager', state.filters.maxWager);
 
     try {
+      if (!options.silent) els.gamesLoading.hidden = false;
       const data = await api(`/api/games?${params.toString()}`);
+      const games = data.games || [];
+      const meta = normalizeMeta(data, games, page, limit);
+      state.totals.lobby = meta.total;
+      if (page > meta.totalPages && meta.totalPages > 0) {
+        state.pages.lobby = meta.totalPages;
+        return refreshOpenGames(options);
+      }
+      state.pages.lobby = Math.min(page, meta.totalPages);
       els.gamesLoading.hidden = true;
-      renderOpenGames(data.games || []);
+      renderOpenGames(games);
+      updatePager('games', meta);
     } catch (err) {
-      if (els.gamesLoading) els.gamesLoading.textContent = 'Could not load games.';
+      if (els.gamesLoading) {
+        els.gamesLoading.hidden = false;
+        els.gamesLoading.textContent = 'Could not load games.';
+      }
     }
   }
 
@@ -612,29 +695,49 @@
   }
 
   function applyFilters() {
-    const min = Number(els.filterMin.value);
-    const max = Number(els.filterMax.value);
+    sanitizeIntegerInput(els.filterMin);
+    sanitizeIntegerInput(els.filterMax);
+    const min = els.filterMin.value ? parseWholeDollars(els.filterMin.value) : null;
+    const max = els.filterMax.value ? parseWholeDollars(els.filterMax.value) : null;
     state.filters = {};
-    if (Number.isFinite(min) && els.filterMin.value !== '' && min >= 0) state.filters.minWager = min;
-    if (Number.isFinite(max) && els.filterMax.value !== '' && max >= 0) state.filters.maxWager = max;
+    if (min !== null && min >= 0) state.filters.minWager = min;
+    if (max !== null && max >= 0) state.filters.maxWager = max;
+    state.pages.lobby = 1;
     refreshOpenGames();
   }
   function clearFilters() {
     els.filterMin.value = '';
     els.filterMax.value = '';
     state.filters = {};
+    state.pages.lobby = 1;
     refreshOpenGames();
   }
 
   // -------------------------------------------------------------------
   // My games panel
   // -------------------------------------------------------------------
-  async function refreshMyGames() {
+  async function refreshMyGames(options = {}) {
     try {
-      const data = await api('/api/me/games?limit=30');
-      els.myLoading.hidden = true;
-      renderMyGames(data.games || []);
-      processCompletionDetection(data.games || []);
+      const page = options.forNotification ? 1 : state.pages.my;
+      const limit = options.forNotification ? 20 : state.pageSize.my;
+      if (!options.silent && els.myLoading) els.myLoading.hidden = false;
+      const data = await api(`/api/me/games?page=${page}&limit=${limit}`);
+      const games = data.games || [];
+      const meta = normalizeMeta(data, games, page, limit);
+      if (!options.forNotification) {
+        state.totals.my = meta.total;
+        if (page > meta.totalPages && meta.totalPages > 0) {
+          state.pages.my = meta.totalPages;
+          return refreshMyGames(options);
+        }
+        state.pages.my = Math.min(page, meta.totalPages);
+        els.myLoading.hidden = true;
+        renderMyGames(games);
+        updatePager('my', meta);
+      } else if (state.activeMainTab === 'my' && page === state.pages.my) {
+        renderMyGames(games);
+      }
+      processCompletionDetection(games);
     } catch (err) {
       console.warn('[refreshMyGames]', err);
     }
@@ -657,6 +760,7 @@
       const detail = $('.my-row-detail', node);
       const amount = $('.my-row-amount', node);
       const time   = $('.my-row-time', node);
+      const cancelBtn = $('.my-row-cancel', node);
 
       const wager = Number(g.wager);
       const isCreator = (g.creator_id === myId);
@@ -677,6 +781,10 @@
         detail.appendChild(txt);
         amount.textContent = formatMoney(wager);
         amount.classList.add('is-pending');
+        if (isCreator && cancelBtn) {
+          cancelBtn.hidden = false;
+          on(cancelBtn, 'click', () => handleCancelGame(g.id, cancelBtn));
+        }
       } else if (g.status === 'completed') {
         const won = (g.winner_id === myId);
         status.textContent = won ? 'Won' : 'Lost';
@@ -694,7 +802,7 @@
         detail.appendChild(oppName);
         detail.appendChild(part2);
 
-        amount.textContent = (won ? '+' : '−') + formatMoney(wager);
+        amount.textContent = won ? `+${formatMoney(wager * 2)}` : `−${formatMoney(wager)}`;
         amount.classList.add(won ? 'is-win' : 'is-loss');
       } else {
         status.textContent = 'Cancelled';
@@ -783,7 +891,7 @@
     els.resultBanner.classList.add(won ? 'is-win' : 'is-loss');
 
     els.resultBannerTitle.textContent = won
-      ? `You won ${formatMoney(wager)}!`
+      ? `You won ${formatMoney(wager * 2)}!`
       : `You lost ${formatMoney(wager)}.`;
 
     // Build subtitle safely (no innerHTML with user data)
@@ -800,11 +908,17 @@
 
     els.resultBanner.hidden = false;
     els.resultBanner.setAttribute('role', 'alert');
+    if (state.bannerTimer) clearTimeout(state.bannerTimer);
+    state.bannerTimer = setTimeout(hideResultBanner, 20000);
     if (navigator.vibrate) {
       try { navigator.vibrate(won ? [35, 40, 35] : [60]); } catch {}
     }
   }
   function hideResultBanner() {
+    if (state.bannerTimer) {
+      clearTimeout(state.bannerTimer);
+      state.bannerTimer = null;
+    }
     els.resultBanner.hidden = true;
     els.resultBanner.classList.remove('is-win', 'is-loss');
   }
@@ -812,13 +926,28 @@
   // -------------------------------------------------------------------
   // Leaderboard
   // -------------------------------------------------------------------
-  async function refreshLeaderboard() {
+  async function refreshLeaderboard(options = {}) {
     try {
-      const data = await api('/api/leaderboard');
+      const page = state.pages.leaderboard;
+      const limit = state.pageSize.leaderboard;
+      if (!options.silent && els.lbLoading) els.lbLoading.hidden = false;
+      const data = await api(`/api/leaderboard?page=${page}&limit=${limit}`);
+      const users = data.users || [];
+      const meta = normalizeMeta(data, users, page, limit);
+      state.totals.leaderboard = meta.total;
+      if (page > meta.totalPages && meta.totalPages > 0) {
+        state.pages.leaderboard = meta.totalPages;
+        return refreshLeaderboard(options);
+      }
+      state.pages.leaderboard = Math.min(page, meta.totalPages);
       els.lbLoading.hidden = true;
-      renderLeaderboard(data.users || []);
+      renderLeaderboard(users);
+      updatePager('lb', meta);
     } catch (err) {
-      if (els.lbLoading) els.lbLoading.textContent = 'Could not load leaderboard.';
+      if (els.lbLoading) {
+        els.lbLoading.hidden = false;
+        els.lbLoading.textContent = 'Could not load leaderboard.';
+      }
     }
   }
   function renderLeaderboard(users) {
@@ -851,8 +980,9 @@
     e.preventDefault();
     clearFeedback(els.createFeedback);
 
+    sanitizeIntegerInput(els.wagerInput, { clampMax: true });
     const choice = (els.formCreateGame.querySelector('input[name="choice"]:checked') || {}).value;
-    const wager  = Number(els.wagerInput.value);
+    const wager  = parseWholeDollars(els.wagerInput.value);
 
     if (!choice) {
       showFeedback(els.createFeedback, 'Pick heads or tails.', 'error');
@@ -860,17 +990,21 @@
     }
     const minWager = Number(CONFIG.MIN_WAGER) || 1;
     const maxWager = getMaxAllowedWager();
-    if (!Number.isFinite(wager) || wager < minWager || wager > maxWager) {
+    if (wager === null || wager < minWager || wager > maxWager) {
       showFeedback(els.createFeedback, `Wager must be between $${compactMoney(minWager)} and $${compactMoney(maxWager)}.`, 'error');
       return;
     }
 
     setLoading(els.createBtn, true);
     try {
-      await api('/api/games', {
+      const data = await api('/api/games', {
         method: 'POST',
         body: JSON.stringify({ choice, wager }),
       });
+      if (data.user) {
+        state.user = data.user;
+        updateTopbar();
+      }
       els.wagerInput.value = '';
       updateWagerLimitUI();
       showFeedback(els.createFeedback, 'Game created. Waiting for an opponent…', 'success');
@@ -882,6 +1016,31 @@
       showFeedback(els.createFeedback, err.message, 'error');
     } finally {
       setLoading(els.createBtn, false);
+    }
+  }
+
+  // -------------------------------------------------------------------
+  // Cancel game
+  // -------------------------------------------------------------------
+  async function handleCancelGame(gameId, btn) {
+    if (!gameId || !confirm('Cancel this open game and refund the wager?')) return;
+    setLoading(btn, true);
+    try {
+      const data = await api(`/api/games/${gameId}/cancel`, { method: 'POST' });
+      if (data.user) {
+        state.user = data.user;
+        updateTopbar();
+      }
+      showFeedback(els.createFeedback, 'Game cancelled and wager refunded.', 'success');
+      setTimeout(() => clearFeedback(els.createFeedback), 20000);
+      refreshOpenGames().catch(() => {});
+      refreshMyGames().catch(() => {});
+    } catch (err) {
+      showFeedback(els.createFeedback, err.message, 'error');
+      setTimeout(() => clearFeedback(els.createFeedback), 20000);
+      refreshMyGames().catch(() => {});
+    } finally {
+      setLoading(btn, false);
     }
   }
 
@@ -940,7 +1099,7 @@
       // Heads = even number of half-turns (lands face up).
       // Tails = odd number of half-turns. Multiply by 360 for a clean
       // multi-rotation finish, then add 180 for tails.
-      const finalY = (result === 'heads') ? '1800deg' : '1980deg';
+      const finalY = (result === 'heads') ? '2160deg' : '2340deg';
       const dur    = CONFIG.DEFAULT_FLIP_DURATION_MS;
 
       inner.style.setProperty('--final-y', finalY);
@@ -971,7 +1130,7 @@
     els.resultSide.textContent    = capitalize(game.result);
     els.resultPick.textContent    = capitalize(myPick);
     els.resultOutcome.textContent = won ? 'You won' : 'You lost';
-    els.resultAmount.textContent  = (won ? '+' : '−') + formatMoney(wager);
+    els.resultAmount.textContent  = won ? `+${formatMoney(wager * 2)}` : `−${formatMoney(wager)}`;
     const newBalance = data.user ? data.user.balance : data.balance;
     els.resultBalance.textContent = formatMoney(newBalance);
 
@@ -1032,22 +1191,29 @@
 
     // Create
     on(els.formCreateGame, 'submit', handleCreateGame);
-    on(els.wagerInput, 'input', () => {
-      const max = getMaxAllowedWager();
-      const value = Number(els.wagerInput.value);
-      if (Number.isFinite(value) && max > 0 && value > max) els.wagerInput.value = String(Math.floor(max));
+    on(els.wagerInput, 'beforeinput', (e) => {
+      if (e.data && /[^0-9]/.test(e.data)) e.preventDefault();
     });
+    on(els.wagerInput, 'input', () => sanitizeIntegerInput(els.wagerInput, { clampMax: true }));
+    on(els.filterMin, 'input', () => sanitizeIntegerInput(els.filterMin));
+    on(els.filterMax, 'input', () => sanitizeIntegerInput(els.filterMax));
 
     // Open games filters / refresh
     on(els.applyFilters, 'click', applyFilters);
     on(els.clearFilters, 'click', clearFilters);
     on(els.refreshGames, 'click', () => refreshOpenGames());
+    on(els.gamesPrev, 'click', () => { if (state.pages.lobby > 1) { state.pages.lobby -= 1; refreshOpenGames(); } });
+    on(els.gamesNext, 'click', () => { state.pages.lobby += 1; refreshOpenGames(); });
 
     // My games refresh
     on(els.refreshMy, 'click', () => refreshMyGames());
+    on(els.myPrev, 'click', () => { if (state.pages.my > 1) { state.pages.my -= 1; refreshMyGames(); } });
+    on(els.myNext, 'click', () => { state.pages.my += 1; refreshMyGames(); });
 
     // Leaderboard refresh
     on(els.refreshLb, 'click', () => refreshLeaderboard());
+    on(els.lbPrev, 'click', () => { if (state.pages.leaderboard > 1) { state.pages.leaderboard -= 1; refreshLeaderboard(); } });
+    on(els.lbNext, 'click', () => { state.pages.leaderboard += 1; refreshLeaderboard(); });
 
     // Result banner
     on(els.resultBannerClose, 'click', hideResultBanner);
@@ -1070,8 +1236,9 @@
     on(document, 'visibilitychange', () => {
       if (document.hidden) return;
       if (!state.user) return;
-      refreshOpenGames().catch(() => {});
-      refreshMyGames().catch(() => {});
+      refreshMyGames({ forNotification: true, silent: true }).catch(() => {});
+      if (state.activeMainTab === 'lobby') refreshOpenGames({ silent: true }).catch(() => {});
+      if (state.activeMainTab === 'leaderboard') refreshLeaderboard({ silent: true }).catch(() => {});
     });
   }
 
