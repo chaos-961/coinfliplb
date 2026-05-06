@@ -5,6 +5,14 @@
    grid on wider screens. The 3D coin uses CSS transforms.
    ===================================================================== */
 
+/* --- Hidden attribute reset ----------------------------------------------
+   The HTML `hidden` attribute is implemented by browsers as
+   `[hidden] { display: none }` in the user-agent stylesheet, which any
+   author-written `display:` rule (e.g. on .modal-backdrop) silently
+   overrides. This single rule makes `hidden` always win.
+   ---------------------------------------------------------------------- */
+[hidden] { display: none !important; }
+
 /* --- Tokens ---------------------------------------------------------- */
 :root {
   --bg:           #0b0d12;
