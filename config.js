@@ -10,7 +10,7 @@
 const CONFIG = {
   // CHANGE ME after deploying the backend to Railway. No trailing slash.
   // Example: "https://coinflip-arena-production.up.railway.app"
-  API_BASE_URL: "http://localhost:3000",
+  API_BASE_URL: "http://coinfliplb-production.up.railway.app",
 
   // Display value only. The real starting balance is set in the
   // backend env var STARTING_BALANCE — keep these two in sync.
@@ -32,10 +32,10 @@ const CONFIG = {
   MAX_WAGER: 100,
 
   // Auto-refresh the open games list this often (set to 0 to disable).
-  POLLING_INTERVAL_MS: 3000,
+  POLLING_INTERVAL_MS: 5000,
 
   // Branding.
-  APP_NAME: "CoinFlip Arena",
+  APP_NAME: "CoinFlip LB",
 };
 
 // Make CONFIG available to other scripts that load after this one.
