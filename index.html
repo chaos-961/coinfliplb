@@ -260,7 +260,7 @@
         <div class="empty-state" id="games-empty" hidden>
           No open games right now. Be the first — create one above.
         </div>
-        <div class="loading-row" id="games-loading">Loading open games…</div>
+        <div class="loading-row loading-card" id="games-loading" aria-live="polite" data-label="Loading open games…"><div class="skeleton-row"><span class="skeleton-dot"></span><span class="skeleton-line"></span><span class="skeleton-pill"></span></div><div class="skeleton-row"><span class="skeleton-dot"></span><span class="skeleton-line"></span><span class="skeleton-pill"></span></div><div class="skeleton-row"><span class="skeleton-dot"></span><span class="skeleton-line"></span><span class="skeleton-pill"></span></div><div class="skeleton-row"><span class="skeleton-dot"></span><span class="skeleton-line"></span><span class="skeleton-pill"></span></div></div>
         <div class="pager" id="games-pager" hidden>
           <button type="button" class="btn btn-ghost btn-sm" id="games-prev">← Previous</button>
           <span class="pager-info" id="games-page-info">Page 1</span>
@@ -278,7 +278,7 @@
         <div class="empty-state" id="my-empty" hidden>
           You haven't played a game yet. Create one above to get started.
         </div>
-        <div class="loading-row" id="my-loading" hidden>Loading your games…</div>
+        <div class="loading-row loading-card" id="my-loading" hidden aria-live="polite" data-label="Loading your games…"><div class="skeleton-row"><span class="skeleton-dot"></span><span class="skeleton-line"></span><span class="skeleton-pill"></span></div><div class="skeleton-row"><span class="skeleton-dot"></span><span class="skeleton-line"></span><span class="skeleton-pill"></span></div><div class="skeleton-row"><span class="skeleton-dot"></span><span class="skeleton-line"></span><span class="skeleton-pill"></span></div><div class="skeleton-row"><span class="skeleton-dot"></span><span class="skeleton-line"></span><span class="skeleton-pill"></span></div></div>
         <div class="pager" id="my-pager" hidden>
           <button type="button" class="btn btn-ghost btn-sm" id="my-prev">← Previous</button>
           <span class="pager-info" id="my-page-info">Page 1</span>
@@ -294,7 +294,7 @@
         </div>
         <div class="rows leaderboard-rows" id="lb-rows"></div>
         <div class="empty-state" id="lb-empty" hidden>No players yet.</div>
-        <div class="loading-row" id="lb-loading" hidden>Loading leaderboard…</div>
+        <div class="loading-row loading-card" id="lb-loading" hidden aria-live="polite" data-label="Loading leaderboard…"><div class="skeleton-row"><span class="skeleton-dot"></span><span class="skeleton-line"></span><span class="skeleton-pill"></span></div><div class="skeleton-row"><span class="skeleton-dot"></span><span class="skeleton-line"></span><span class="skeleton-pill"></span></div><div class="skeleton-row"><span class="skeleton-dot"></span><span class="skeleton-line"></span><span class="skeleton-pill"></span></div><div class="skeleton-row"><span class="skeleton-dot"></span><span class="skeleton-line"></span><span class="skeleton-pill"></span></div><div class="skeleton-row"><span class="skeleton-dot"></span><span class="skeleton-line"></span><span class="skeleton-pill"></span></div></div>
         <div class="pager" id="lb-pager" hidden>
           <button type="button" class="btn btn-ghost btn-sm" id="lb-prev">← Previous</button>
           <span class="pager-info" id="lb-page-info">Page 1</span>
@@ -304,7 +304,7 @@
     </section>
   </main>
 
-  <footer class="app-footer" aria-label="Version">v0.5</footer>
+  <footer class="app-footer" aria-label="Version">v0.6</footer>
 
   <!-- =============================================================== -->
   <!-- FLIP MODAL -->

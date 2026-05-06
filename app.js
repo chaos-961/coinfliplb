@@ -282,6 +282,39 @@
     }
   }
 
+  function setListLoading(kind, loading, label = 'Loading…', isError = false) {
+    const map = {
+      games: { loading: els.gamesLoading, rows: els.gamesRows, empty: els.gamesEmpty },
+      my:    { loading: els.myLoading,    rows: els.myRows,    empty: els.myEmpty },
+      lb:    { loading: els.lbLoading,    rows: els.lbRows,    empty: els.lbEmpty },
+    };
+    const target = map[kind];
+    if (!target || !target.loading) return;
+
+    target.loading.hidden = !loading;
+    target.loading.classList.toggle('is-error', Boolean(isError));
+    target.loading.dataset.label = label;
+
+    if (loading) {
+      target.loading.innerHTML = isError
+        ? '<div class="loading-error-note">Tap refresh and try again.</div>'
+        : Array.from({ length: kind === 'lb' ? 5 : 4 }, () => (
+          '<div class="skeleton-row"><span class="skeleton-dot"></span><span class="skeleton-line"></span><span class="skeleton-pill"></span></div>'
+        )).join('');
+      if (!isError && target.empty) target.empty.hidden = true;
+      if (target.rows) {
+        target.rows.setAttribute('aria-busy', 'true');
+        target.rows.classList.toggle('is-refreshing', target.rows.children.length > 0);
+      }
+    } else {
+      target.loading.innerHTML = '';
+      if (target.rows) {
+        target.rows.setAttribute('aria-busy', 'false');
+        target.rows.classList.remove('is-refreshing');
+      }
+    }
+  }
+
   // -------------------------------------------------------------------
   // Formatting
   // -------------------------------------------------------------------
@@ -624,7 +657,7 @@
     if (state.filters.maxWager != null) params.set('maxWager', state.filters.maxWager);
 
     try {
-      if (!options.silent) els.gamesLoading.hidden = false;
+      if (!options.silent) setListLoading('games', true, 'Loading open games…');
       const data = await api(`/api/games?${params.toString()}`);
       const games = data.games || [];
       const meta = normalizeMeta(data, games, page, limit);
@@ -634,13 +667,12 @@
         return refreshOpenGames(options);
       }
       state.pages.lobby = Math.min(page, meta.totalPages);
-      els.gamesLoading.hidden = true;
+      setListLoading('games', false);
       renderOpenGames(games);
       updatePager('games', meta);
     } catch (err) {
       if (els.gamesLoading) {
-        els.gamesLoading.hidden = false;
-        els.gamesLoading.textContent = 'Could not load games.';
+        setListLoading('games', true, 'Could not load open games.', true);
       }
     }
   }
@@ -680,8 +712,11 @@
       const insufficient = (Number(g.wager) > myBalance);
       if (joinBtn) {
         if (isOwn) {
-          joinBtn.disabled = true;
-          joinBtn.textContent = 'Your game';
+          joinBtn.textContent = 'Cancel';
+          joinBtn.classList.remove('btn-primary');
+          joinBtn.classList.add('btn-danger');
+          joinBtn.setAttribute('aria-label', 'Cancel your open game');
+          on(joinBtn, 'click', () => handleCancelGame(g.id, joinBtn));
         } else if (insufficient) {
           joinBtn.disabled = true;
           joinBtn.textContent = 'Insufficient';
@@ -720,7 +755,7 @@
     try {
       const page = options.forNotification ? 1 : state.pages.my;
       const limit = options.forNotification ? 20 : state.pageSize.my;
-      if (!options.silent && els.myLoading) els.myLoading.hidden = false;
+      if (!options.silent) setListLoading('my', true, 'Loading your games…');
       const data = await api(`/api/me/games?page=${page}&limit=${limit}`);
       const games = data.games || [];
       const meta = normalizeMeta(data, games, page, limit);
@@ -731,7 +766,7 @@
           return refreshMyGames(options);
         }
         state.pages.my = Math.min(page, meta.totalPages);
-        els.myLoading.hidden = true;
+        setListLoading('my', false);
         renderMyGames(games);
         updatePager('my', meta);
       } else if (state.activeMainTab === 'my' && page === state.pages.my) {
@@ -740,6 +775,7 @@
       processCompletionDetection(games);
     } catch (err) {
       console.warn('[refreshMyGames]', err);
+      if (!options.silent && !options.forNotification) setListLoading('my', true, 'Could not load your games.', true);
     }
   }
 
@@ -930,7 +966,7 @@
     try {
       const page = state.pages.leaderboard;
       const limit = state.pageSize.leaderboard;
-      if (!options.silent && els.lbLoading) els.lbLoading.hidden = false;
+      if (!options.silent) setListLoading('lb', true, 'Loading leaderboard…');
       const data = await api(`/api/leaderboard?page=${page}&limit=${limit}`);
       const users = data.users || [];
       const meta = normalizeMeta(data, users, page, limit);
@@ -940,13 +976,12 @@
         return refreshLeaderboard(options);
       }
       state.pages.leaderboard = Math.min(page, meta.totalPages);
-      els.lbLoading.hidden = true;
+      setListLoading('lb', false);
       renderLeaderboard(users);
       updatePager('lb', meta);
     } catch (err) {
       if (els.lbLoading) {
-        els.lbLoading.hidden = false;
-        els.lbLoading.textContent = 'Could not load leaderboard.';
+        setListLoading('lb', true, 'Could not load leaderboard.', true);
       }
     }
   }
@@ -1099,8 +1134,8 @@
       // Heads = even number of half-turns (lands face up).
       // Tails = odd number of half-turns. Multiply by 360 for a clean
       // multi-rotation finish, then add 180 for tails.
-      const finalY = (result === 'heads') ? '2160deg' : '2340deg';
-      const dur    = CONFIG.DEFAULT_FLIP_DURATION_MS;
+      const finalY = (result === 'heads') ? '1800deg' : '1980deg';
+      const dur    = Math.min(Number(CONFIG.DEFAULT_FLIP_DURATION_MS) || 2200, 2300);
 
       inner.style.setProperty('--final-y', finalY);
       inner.style.setProperty('--toss-duration', `${dur}ms`);
