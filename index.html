@@ -13,7 +13,9 @@
   <script src="config.js" defer></script>
   <script src="app.js" defer></script>
 </head>
-<body data-config="loading">
+<body data-config="loading" data-theme="dark">
+
+  <button type="button" class="theme-toggle" id="theme-toggle" aria-label="Switch to light mode" title="Toggle light mode">☀</button>
 
   <!-- Decorative background. All purely visual — non-interactive. -->
   <div class="bg-deco" aria-hidden="true">
@@ -196,7 +198,7 @@
             </label>
           </div>
 
-          <label class="field">
+          <label class="field wager-field">
             <span class="field-label">Wager</span>
             <div class="prefix-input">
               <span class="prefix">$</span>
@@ -204,13 +206,14 @@
                 type="number"
                 id="wager-input"
                 name="wager"
-                inputmode="numeric"
+                inputmode="decimal"
                 min="1"
                 step="1"
-                placeholder="10"
+                placeholder="$1 - your balance"
                 required
               />
             </div>
+            <span class="field-hint" id="wager-hint">$1 - your balance</span>
           </label>
 
           <button type="submit" class="btn btn-primary btn-lg" id="create-btn">Create game</button>
@@ -284,6 +287,8 @@
       </div>
     </section>
   </main>
+
+  <footer class="app-footer" aria-label="Version">v0.4</footer>
 
   <!-- =============================================================== -->
   <!-- FLIP MODAL -->

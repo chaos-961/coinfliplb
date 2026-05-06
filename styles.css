@@ -61,6 +61,31 @@
   --font-mono:  ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
+body[data-theme="light"] {
+  --bg:           #f6f7fb;
+  --bg-elev:      #ffffff;
+  --bg-elev-2:    #f1f3f8;
+  --bg-elev-3:    #e8ebf3;
+  --line:         #d9deea;
+  --line-2:       #c7cedf;
+
+  --text:         #111827;
+  --text-dim:     #4b5563;
+  --text-mute:    #7b8496;
+
+  --primary:      #7c3aed;
+  --primary-hi:   #6d28d9;
+  --primary-deep: #5b21b6;
+  --primary-ink:  #ffffff;
+
+  --good-bg:      rgba(22, 163, 74, 0.10);
+  --bad-bg:       rgba(220, 38, 38, 0.10);
+
+  --shadow-sm: 0 2px 8px rgba(15, 23, 42, 0.08);
+  --shadow:    0 18px 42px -20px rgba(15, 23, 42, 0.25), 0 4px 14px rgba(15, 23, 42, 0.08);
+  --shadow-lg: 0 30px 70px -32px rgba(15, 23, 42, 0.34), 0 10px 28px rgba(15, 23, 42, 0.10);
+}
+
 /* --- Reset ---------------------------------------------------------- */
 *, *::before, *::after { box-sizing: border-box; }
 html, body { margin: 0; padding: 0; }
@@ -138,6 +163,14 @@ p  { margin: 0; }
   mask-image: radial-gradient(ellipse 80% 60% at 50% 30%, #000 30%, transparent 80%);
   -webkit-mask-image: radial-gradient(ellipse 80% 60% at 50% 30%, #000 30%, transparent 80%);
 }
+body[data-theme="light"] .bg-grid {
+  background-image:
+    linear-gradient(rgba(15,23,42,0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(15,23,42,0.045) 1px, transparent 1px);
+}
+body[data-theme="light"] .orb-a { opacity: 0.20; }
+body[data-theme="light"] .orb-b { opacity: 0.16; }
+body[data-theme="light"] .orb-c { opacity: 0.18; }
 @media (prefers-reduced-motion: reduce) {
   .bg-orb { animation: none; }
 }
@@ -148,7 +181,7 @@ p  { margin: 0; }
   display: flex; align-items: center; justify-content: space-between;
   gap: 12px;
   padding: 12px 20px;
-  background: rgba(7, 8, 15, 0.72);
+  background: color-mix(in srgb, var(--bg) 76%, transparent);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--line);
@@ -191,12 +224,53 @@ p  { margin: 0; }
   font-size: 14px;
 }
 
+.theme-toggle {
+  position: fixed;
+  right: 14px;
+  bottom: 14px;
+  z-index: 90;
+  width: 42px;
+  height: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  border: 1px solid var(--line-2);
+  background: color-mix(in srgb, var(--bg-elev) 86%, transparent);
+  color: var(--text);
+  box-shadow: var(--shadow-sm);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  transition: transform 120ms ease, background 150ms ease, border-color 150ms ease;
+}
+.theme-toggle:hover { transform: translateY(-1px); border-color: var(--primary); }
+
+.app-footer {
+  position: fixed;
+  left: 12px;
+  bottom: 10px;
+  z-index: 20;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--text-mute);
+  opacity: 0.72;
+  pointer-events: none;
+}
+
 /* --- Layout containers ---------------------------------------------- */
 main {
   display: block;
   padding: 28px 20px 80px;
   max-width: 1100px;
   margin: 0 auto;
+}
+body[data-view="auth"] main {
+  max-width: none;
+  padding: 0;
+}
+body[data-view="dashboard"] main {
+  max-width: 1100px;
 }
 
 /* --- Buttons -------------------------------------------------------- */
@@ -297,6 +371,13 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .prefix-input-sm .prefix { left: 10px; font-size: 13px; }
 
 /* --- Inline feedback (replaces toasts) ------------------------------ */
+.field-hint {
+  display: block;
+  margin-top: 6px;
+  color: var(--text-mute);
+  font-size: 12px;
+}
+
 .form-feedback {
   margin-top: 12px;
   padding: 10px 12px;
@@ -347,20 +428,20 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 
 /* --- AUTH VIEW ------------------------------------------------------ */
 .view-auth {
-  min-height: calc(100vh - 0px);
+  min-height: 100vh;
   min-height: 100dvh;
   display: flex; align-items: center; justify-content: center;
-  padding: 40px 20px;
+  padding: clamp(14px, 3vh, 32px) 20px;
 }
 .auth-card {
   width: 100%;
   max-width: 440px;
-  background: rgba(17, 19, 30, 0.78);
+  background: color-mix(in srgb, var(--bg-elev) 82%, transparent);
   backdrop-filter: blur(18px) saturate(140%);
   -webkit-backdrop-filter: blur(18px) saturate(140%);
   border: 1px solid var(--line-2);
   border-radius: var(--radius-xl);
-  padding: 36px 28px 28px;
+  padding: clamp(22px, 4vh, 32px) 28px 24px;
   box-shadow: var(--shadow-lg), inset 0 1px 0 rgba(255,255,255,0.05);
   text-align: center;
   animation: card-rise 500ms cubic-bezier(0.2, 0.8, 0.2, 1);
@@ -371,7 +452,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 }
 .auth-coin-deco {
   display: flex; justify-content: center;
-  margin-bottom: 18px;
+  margin-bottom: clamp(10px, 2vh, 18px);
 }
 .auth-title {
   font-size: 28px;
@@ -386,13 +467,13 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .auth-subtitle {
   color: var(--text-dim);
   font-size: 14px;
-  margin: 0 auto 24px;
+  margin: 0 auto clamp(14px, 2.6vh, 22px);
   max-width: 340px;
   line-height: 1.55;
 }
-.auth-form { text-align: left; margin-top: 20px; }
+.auth-form { text-align: left; margin-top: clamp(12px, 2.2vh, 18px); }
 .auth-fineprint {
-  margin-top: 22px;
+  margin-top: clamp(12px, 2.2vh, 20px);
   font-size: 12px;
   color: var(--text-mute);
 }
@@ -445,14 +526,23 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 
 /* --- Result banner -------------------------------------------------- */
 .result-banner {
+  position: fixed;
+  top: calc(env(safe-area-inset-top, 0px) + 14px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 75;
+  width: min(560px, calc(100vw - 24px));
   display: flex; align-items: center; gap: 14px;
-  margin-bottom: 18px;
-  padding: 16px;
+  padding: 14px 14px 14px 16px;
   background: linear-gradient(135deg, rgba(139, 92, 246, 0.18) 0%, rgba(34, 197, 94, 0.10) 100%);
   border: 1px solid rgba(139, 92, 246, 0.3);
   border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-sm);
-  animation: card-rise 320ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  box-shadow: var(--shadow-lg);
+  animation: result-pop 260ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@keyframes result-pop {
+  from { opacity: 0; transform: translate(-50%, -12px) scale(0.98); }
+  to   { opacity: 1; transform: translate(-50%, 0) scale(1); }
 }
 .result-banner.is-loss {
   background: linear-gradient(135deg, rgba(239, 68, 68, 0.18) 0%, rgba(17, 19, 30, 0.4) 100%);
@@ -743,20 +833,20 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 
 /* Flip toss — full choreography in one keyframe set.
    --final-y is set by JS based on the result.
-   Heads → 2160deg (6 full rotations, lands face up).
-   Tails → 2340deg (6.5 rotations, lands face down). */
+   Heads → 1800deg (5 full rotations, lands face up).
+   Tails → 1980deg (5.5 rotations, lands face down). */
 .coin.is-tossing .coin-inner {
-  animation: flip-toss var(--toss-duration, 4200ms) cubic-bezier(0.22, 0.7, 0.18, 1.02) forwards;
+  animation: flip-toss var(--toss-duration, 2600ms) cubic-bezier(0.18, 0.72, 0.16, 1) forwards;
 }
 @keyframes flip-toss {
-  0%   { transform: translateY(0)    rotateX(0deg)    rotateY(0deg)    rotateZ(0deg) scale(1); }
-  10%  { transform: translateY(-30px) rotateX(180deg)  rotateY(120deg)  rotateZ(4deg) scale(1.03); }
-  30%  { transform: translateY(-90px) rotateX(900deg)  rotateY(720deg)  rotateZ(-3deg) scale(1.06); }
-  55%  { transform: translateY(-110px) rotateX(1800deg) rotateY(1260deg) rotateZ(2deg)  scale(1.05); }
-  78%  { transform: translateY(-50px) rotateX(2520deg) rotateY(1800deg) rotateZ(-1deg) scale(1.02); }
-  92%  { transform: translateY(0)    rotateX(2880deg) rotateY(var(--final-y, 2160deg)) rotateZ(0)    scaleY(0.88); }
-  98%  { transform: translateY(0)    rotateX(2880deg) rotateY(var(--final-y, 2160deg)) rotateZ(0)    scaleY(1.02); }
-  100% { transform: translateY(0)    rotateX(2880deg) rotateY(var(--final-y, 2160deg)) rotateZ(0)    scaleY(1); }
+  0%   { transform: translateY(0) rotateY(0deg) rotateZ(0deg) scale(1); }
+  14%  { transform: translateY(-34px) rotateY(360deg) rotateZ(3deg) scale(1.03); }
+  34%  { transform: translateY(-108px) rotateY(900deg) rotateZ(-4deg) scale(1.06); }
+  58%  { transform: translateY(-122px) rotateY(1350deg) rotateZ(2deg) scale(1.05); }
+  78%  { transform: translateY(-42px) rotateY(1710deg) rotateZ(-1deg) scale(1.02); }
+  91%  { transform: translateY(0) rotateY(var(--final-y, 1800deg)) rotateZ(0deg) scale(1.04, 0.92); }
+  97%  { transform: translateY(-4px) rotateY(var(--final-y, 1800deg)) rotateZ(0deg) scale(0.99, 1.02); }
+  100% { transform: translateY(0) rotateY(var(--final-y, 1800deg)) rotateZ(0deg) scale(1); }
 }
 @media (prefers-reduced-motion: reduce) {
   .coin.is-tossing .coin-inner {
@@ -787,7 +877,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   animation: shadow-pulse 1.6s ease-in-out infinite;
 }
 .coin-xl.is-tossing .coin-shadow {
-  animation: shadow-toss var(--toss-duration, 4200ms) cubic-bezier(0.22, 0.7, 0.18, 1.02) forwards;
+  animation: shadow-toss var(--toss-duration, 2600ms) cubic-bezier(0.22, 0.7, 0.18, 1.02) forwards;
 }
 @keyframes shadow-pulse {
   0%, 100% { transform: translateX(-50%) scaleX(1); opacity: 0.55; }
@@ -804,7 +894,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 /* --- Modal ---------------------------------------------------------- */
 .modal-backdrop {
   position: fixed; inset: 0; z-index: 80;
-  background: rgba(5, 6, 12, 0.74);
+  background: color-mix(in srgb, var(--bg) 74%, transparent);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   display: flex; align-items: center; justify-content: center;
@@ -871,8 +961,10 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   .topbar { padding: 10px 14px; }
   .user-name { display: none !important; }
 
-  .auth-card { padding: 28px 20px 22px; border-radius: var(--radius-lg); }
+  .auth-card { padding: 22px 18px 18px; border-radius: var(--radius-lg); }
   .auth-title { font-size: 24px; }
+  .auth-coin-deco .coin-md { width: 66px; height: 66px; }
+  .auth-coin-deco .coin-md .coin-face { font-size: 30px; }
 
   .card { padding: 18px; border-radius: var(--radius-md); }
   .card-title { font-size: 17px; }
@@ -916,11 +1008,30 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 
   .balance-pill .balance-label { display: none; }
   .balance-pill { padding: 6px 12px; }
+  .result-banner { top: calc(env(safe-area-inset-top, 0px) + 10px); align-items: flex-start; }
+  .result-banner-coin { width: 38px; height: 38px; }
 }
+
 
 @media (max-width: 380px) {
   .auth-title { font-size: 22px; }
   .auth-subtitle { font-size: 13px; }
   .choice-row { grid-template-columns: 1fr; }
   .filter .prefix-input { width: 80px; }
+}
+@media (max-height: 720px) {
+  .view-auth { align-items: flex-start; padding-top: 10px; padding-bottom: 10px; }
+  .auth-card { padding-top: 18px; padding-bottom: 16px; }
+  .auth-coin-deco { margin-bottom: 8px; }
+  .auth-coin-deco .coin-md { width: 58px; height: 58px; }
+  .auth-coin-deco .coin-md .coin-face { font-size: 26px; }
+  .auth-title { font-size: 23px; margin-bottom: 4px; }
+  .auth-subtitle { font-size: 13px; line-height: 1.4; }
+  .field { margin-bottom: 10px; }
+  .auth-fineprint { font-size: 11px; }
+}
+
+@media (max-width: 420px) {
+  .theme-toggle { right: 10px; bottom: 10px; width: 38px; height: 38px; }
+  .app-footer { left: 10px; bottom: 8px; }
 }

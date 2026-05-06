@@ -43,7 +43,7 @@ const MIN_PASSWORD_LENGTH = 6;
 const MAX_USERNAME_LENGTH = 32;
 const MIN_USERNAME_LENGTH = 3;
 const MIN_WAGER           = 1;
-const MAX_WAGER           = 1_000_000;     // sanity cap; UI uses its own
+const MAX_WAGER           = 10_000_000_000; // sanity cap; UI also caps to current balance
 const TOKEN_EXPIRES_IN    = '7d';
 
 if (!JWT_SECRET || JWT_SECRET.length < 16) {

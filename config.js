@@ -23,15 +23,15 @@ window.CONFIG = Object.freeze({
 
   // ----- Wager limits (UI clamping; backend enforces > 0 & ≤ balance)
   MIN_WAGER: 1,
-  MAX_WAGER: 1000000,
+  MAX_WAGER: 10000000000,
 
   // ----- Flip animation ----------------------------------------------
   // Total time the flip modal animates before revealing the result.
   // Lower = snappier, higher = more suspense.
-  DEFAULT_FLIP_DURATION_MS: 4200,
+  DEFAULT_FLIP_DURATION_MS: 2600,
 
   // ----- Polling -----------------------------------------------------
   // How often the dashboard refreshes data (open games + your games).
   // Pauses while the tab is hidden or while a flip is animating.
-  POLLING_INTERVAL_MS: 60000,
+  POLLING_INTERVAL_MS: 3000,
 });

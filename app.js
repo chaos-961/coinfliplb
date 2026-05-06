@@ -21,6 +21,7 @@
   }
   const API = String(CONFIG.API_BASE_URL).replace(/\/+$/, '');
   const TOKEN_KEY = 'cfa_token';
+  const THEME_KEY = 'cfa_theme';
 
   const state = {
     token:          localStorage.getItem(TOKEN_KEY) || null,
@@ -32,6 +33,7 @@
     pollTimer:      null,
     seenCompletedIds: null,             // Set or null (null = not initialized)
     lastBannerGameId: null,
+    theme:          localStorage.getItem(THEME_KEY) || 'dark',
   };
 
   // -------------------------------------------------------------------
@@ -60,7 +62,7 @@
       'signupUsername', 'signupPassword', 'signupConfirm', 'loginBtn', 'signupBtn',
       'loginFeedback', 'signupFeedback',
       'resultBanner', 'resultBannerTitle', 'resultBannerSub', 'resultBannerClose',
-      'formCreateGame', 'wagerInput', 'createBtn', 'createFeedback',
+      'formCreateGame', 'wagerInput', 'wagerHint', 'createBtn', 'createFeedback',
       'gamesRows', 'gamesEmpty', 'gamesLoading', 'filterMin', 'filterMax',
       'applyFilters', 'clearFilters', 'refreshGames',
       'myRows', 'myEmpty', 'myLoading', 'refreshMy',
@@ -86,6 +88,7 @@
       balanceValue: $('#balance-value'),
       userName:     $('#user-name'),
       logoutBtn:    $('#logout-btn'),
+      themeToggle:  $('#theme-toggle'),
 
       // Views
       viewAuth:      $('#view-auth'),
@@ -114,6 +117,7 @@
       // Create form
       formCreateGame: $('#form-create-game'),
       wagerInput:     $('#wager-input'),
+      wagerHint:      $('#wager-hint'),
       createBtn:      $('#create-btn'),
       createFeedback: $('#create-feedback'),
 
@@ -281,6 +285,52 @@
     return date.toLocaleDateString();
   }
   function capitalize(s) { return s ? s.charAt(0).toUpperCase() + s.slice(1) : s; }
+  function compactMoney(value) {
+    const n = Number(value || 0);
+    return n.toLocaleString('en-US', { maximumFractionDigits: 2 });
+  }
+
+  // -------------------------------------------------------------------
+  // Theme + wager limits
+  // -------------------------------------------------------------------
+  function applyTheme(theme) {
+    const next = (theme === 'light') ? 'light' : 'dark';
+    state.theme = next;
+    document.body.dataset.theme = next;
+    localStorage.setItem(THEME_KEY, next);
+    if (els.themeToggle) {
+      els.themeToggle.textContent = next === 'light' ? '☾' : '☀';
+      els.themeToggle.title = next === 'light' ? 'Switch to dark mode' : 'Switch to light mode';
+      els.themeToggle.setAttribute('aria-label', els.themeToggle.title);
+    }
+  }
+
+  function toggleTheme() {
+    applyTheme(state.theme === 'light' ? 'dark' : 'light');
+  }
+
+  function getMaxAllowedWager() {
+    const configMax = Number(CONFIG.MAX_WAGER) || Number.MAX_SAFE_INTEGER;
+    const balance = state.user ? Number(state.user.balance) : configMax;
+    const safeBalance = Number.isFinite(balance) ? Math.max(0, balance) : 0;
+    return Math.max(0, Math.min(configMax, safeBalance));
+  }
+
+  function updateWagerLimitUI() {
+    if (!els.wagerInput) return;
+    const min = Number(CONFIG.MIN_WAGER) || 1;
+    const max = getMaxAllowedWager();
+    const maxText = max >= min ? `$${compactMoney(max)}` : '$0';
+    els.wagerInput.min = String(min);
+    els.wagerInput.max = max >= min ? String(max) : String(min);
+    els.wagerInput.placeholder = `$${compactMoney(min)} - ${maxText}`;
+    if (els.wagerHint) {
+      els.wagerHint.textContent = max >= min
+        ? `Allowed: $${compactMoney(min)} - ${maxText}`
+        : 'You need at least $1 to create a game.';
+    }
+  }
+
 
   // -------------------------------------------------------------------
   // Session
@@ -307,6 +357,7 @@
       if (els.balancePill) els.balancePill.hidden = true;
       if (els.userName) els.userName.hidden = true;
       if (els.logoutBtn) els.logoutBtn.hidden = true;
+      updateWagerLimitUI();
       return;
     }
     els.topbar.hidden = false;
@@ -315,17 +366,20 @@
     els.userName.hidden = false;
     els.userName.textContent = state.user.username;
     els.logoutBtn.hidden = false;
+    updateWagerLimitUI();
   }
 
   // -------------------------------------------------------------------
   // View switching
   // -------------------------------------------------------------------
   function showAuthView() {
+    document.body.dataset.view = 'auth';
     els.viewAuth.hidden = false;
     els.viewDashboard.hidden = true;
     els.topbar.hidden = !state.user;
   }
   function showDashboardView() {
+    document.body.dataset.view = 'dashboard';
     els.viewAuth.hidden = true;
     els.viewDashboard.hidden = false;
     els.topbar.hidden = false;
@@ -483,7 +537,7 @@
       refreshMyGames().catch(() => {});
       // Light refresh of "me" so the balance pill stays current
       refreshMe().catch(() => {});
-    }, Math.max(5000, Number(CONFIG.POLLING_INTERVAL_MS) || 60000));
+    }, Math.max(2000, Number(CONFIG.POLLING_INTERVAL_MS) || 3000));
   }
   function stopPolling() {
     if (state.pollTimer) clearInterval(state.pollTimer);
@@ -682,7 +736,11 @@
     const fresh = newOnes
       .filter(g => g.id !== state.lastBannerGameId && !justSawInModal(g))
       .sort((a, b) => new Date(b.completed_at) - new Date(a.completed_at))[0];
-    if (fresh) showResultBanner(fresh);
+    if (fresh) {
+      showResultBanner(fresh);
+      refreshMe().catch(() => {});
+      refreshLeaderboard().catch(() => {});
+    }
 
     // If they're not currently looking at My Games, bump the badge
     if (state.activeMainTab !== 'my') {
@@ -741,6 +799,10 @@
     els.resultBannerSub.appendChild(c);
 
     els.resultBanner.hidden = false;
+    els.resultBanner.setAttribute('role', 'alert');
+    if (navigator.vibrate) {
+      try { navigator.vibrate(won ? [35, 40, 35] : [60]); } catch {}
+    }
   }
   function hideResultBanner() {
     els.resultBanner.hidden = true;
@@ -797,13 +859,9 @@
       return;
     }
     const minWager = Number(CONFIG.MIN_WAGER) || 1;
-    const maxWager = Number(CONFIG.MAX_WAGER) || Number.MAX_SAFE_INTEGER;
+    const maxWager = getMaxAllowedWager();
     if (!Number.isFinite(wager) || wager < minWager || wager > maxWager) {
-      showFeedback(els.createFeedback, `Wager must be between $${minWager} and $${maxWager}.`, 'error');
-      return;
-    }
-    if (state.user && wager > Number(state.user.balance)) {
-      showFeedback(els.createFeedback, `You only have ${formatMoney(state.user.balance)} available.`, 'error');
+      showFeedback(els.createFeedback, `Wager must be between $${compactMoney(minWager)} and $${compactMoney(maxWager)}.`, 'error');
       return;
     }
 
@@ -814,6 +872,7 @@
         body: JSON.stringify({ choice, wager }),
       });
       els.wagerInput.value = '';
+      updateWagerLimitUI();
       showFeedback(els.createFeedback, 'Game created. Waiting for an opponent…', 'success');
       // Refresh open games and the user's games immediately
       refreshOpenGames();
@@ -881,7 +940,7 @@
       // Heads = even number of half-turns (lands face up).
       // Tails = odd number of half-turns. Multiply by 360 for a clean
       // multi-rotation finish, then add 180 for tails.
-      const finalY = (result === 'heads') ? '2160deg' : '2340deg';
+      const finalY = (result === 'heads') ? '1800deg' : '1980deg';
       const dur    = CONFIG.DEFAULT_FLIP_DURATION_MS;
 
       inner.style.setProperty('--final-y', finalY);
@@ -969,9 +1028,15 @@
     on(els.formLogin, 'submit', handleLogin);
     on(els.formSignup, 'submit', handleSignup);
     on(els.logoutBtn, 'click', handleLogout);
+    on(els.themeToggle, 'click', toggleTheme);
 
     // Create
     on(els.formCreateGame, 'submit', handleCreateGame);
+    on(els.wagerInput, 'input', () => {
+      const max = getMaxAllowedWager();
+      const value = Number(els.wagerInput.value);
+      if (Number.isFinite(value) && max > 0 && value > max) els.wagerInput.value = String(Math.floor(max));
+    });
 
     // Open games filters / refresh
     on(els.applyFilters, 'click', applyFilters);
@@ -1015,6 +1080,7 @@
   // -------------------------------------------------------------------
   async function boot() {
     captureElements();
+    applyTheme(state.theme);
     if (!assertRequiredElements()) {
       document.body.dataset.config = 'error';
       return;
