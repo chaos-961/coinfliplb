@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#0b0d12" />
+  <title>CoinFlip Arena</title>
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='44' fill='%23f5b301' stroke='%23a87600' stroke-width='4'/%3E%3Ctext x='50' y='66' font-size='52' text-anchor='middle' font-family='system-ui' font-weight='800' fill='%23a87600'%3E%24%3C/text%3E%3C/svg%3E" />
+</head>
+<body>
+
+  <!-- Top nav -->
+  <header class="topbar" id="topbar">
+    <div class="brand">
+      <span class="brand-coin" aria-hidden="true">🪙</span>
+      <span class="brand-name" id="brand-name">CoinFlip Arena</span>
+    </div>
+    <div class="topbar-right">
+      <div class="balance-pill" id="balance-pill" hidden>
+        <span class="balance-label">Balance</span>
+        <span class="balance-amount" id="balance-amount">$0.00</span>
+      </div>
+      <span class="user-name" id="user-name" hidden></span>
+      <button class="btn btn-ghost" id="logout-btn" hidden>Logout</button>
+    </div>
+  </header>
+
+  <!-- Toast container (errors / successes) -->
+  <div class="toast-stack" id="toast-stack" aria-live="polite"></div>
+
+  <main class="main">
+
+    <!-- ============================ LANDING ============================ -->
+    <section class="view view-landing" id="view-landing">
+      <div class="hero">
+        <div class="hero-coin">
+          <div class="coin coin-large" aria-hidden="true">
+            <div class="coin-face coin-heads">H</div>
+            <div class="coin-face coin-tails">T</div>
+          </div>
+        </div>
+        <h1 class="hero-title">Heads or tails?</h1>
+        <p class="hero-sub">
+          Create an account, get <strong>$<span data-config="STARTING_BALANCE">100</span></strong>
+          in fake money, and challenge other players to a coin flip. Winner takes the wager.
+        </p>
+        <div class="hero-actions">
+          <button class="btn btn-primary btn-lg" data-action="show-signup">Create account</button>
+          <button class="btn btn-ghost btn-lg"   data-action="show-login">I already have one</button>
+        </div>
+        <ul class="hero-points">
+          <li><span class="dot"></span>Server-side fair flips — no cheating</li>
+          <li><span class="dot"></span>100% fake money, just for fun</li>
+          <li><span class="dot"></span>Climb the leaderboard</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ============================ AUTH ============================ -->
+    <section class="view view-auth" id="view-auth" hidden>
+      <div class="card auth-card">
+        <div class="tabs">
+          <button class="tab" data-tab="login"  id="tab-login">Login</button>
+          <button class="tab" data-tab="signup" id="tab-signup">Sign up</button>
+        </div>
+
+        <!-- Login form -->
+        <form class="auth-form" id="form-login" novalidate>
+          <label class="field">
+            <span class="field-label">Username</span>
+            <input class="input" type="text" name="username" autocomplete="username" required />
+          </label>
+          <label class="field">
+            <span class="field-label">Password</span>
+            <input class="input" type="password" name="password" autocomplete="current-password" required />
+          </label>
+          <button class="btn btn-primary btn-block" type="submit" data-loading-text="Logging in...">
+            Log in
+          </button>
+          <p class="auth-switch">
+            New here? <a href="#" data-action="show-signup">Create an account</a>
+          </p>
+        </form>
+
+        <!-- Signup form -->
+        <form class="auth-form" id="form-signup" hidden novalidate>
+          <label class="field">
+            <span class="field-label">Username</span>
+            <input class="input" type="text" name="username" autocomplete="username" required
+                   minlength="3" maxlength="32" pattern="[a-zA-Z0-9_.\-]+" />
+            <span class="field-hint">3–32 chars · letters, numbers, _ . -</span>
+          </label>
+          <label class="field">
+            <span class="field-label">Password</span>
+            <input class="input" type="password" name="password" autocomplete="new-password" required />
+            <span class="field-hint">At least <span data-config="MIN_PASSWORD_LENGTH">6</span> characters</span>
+          </label>
+          <button class="btn btn-primary btn-block" type="submit" data-loading-text="Creating account...">
+            Create account
+          </button>
+          <p class="auth-switch">
+            Already registered? <a href="#" data-action="show-login">Log in instead</a>
+          </p>
+        </form>
+
+        <p class="auth-back">
+          <a href="#" data-action="show-landing">← Back</a>
+        </p>
+      </div>
+    </section>
+
+    <!-- ============================ DASHBOARD ============================ -->
+    <section class="view view-dashboard" id="view-dashboard" hidden>
+
+      <div class="dash-grid">
+
+        <!-- Create game card -->
+        <section class="card">
+          <header class="card-head">
+            <h2>Create a coinflip</h2>
+            <p class="muted">Pick a side and a wager. Other players can join.</p>
+          </header>
+          <form id="form-create-game" class="create-form" novalidate>
+            <fieldset class="choice-group">
+              <legend class="visually-hidden">Choose a side</legend>
+              <label class="choice">
+                <input type="radio" name="choice" value="heads" required />
+                <span class="choice-card">
+                  <span class="choice-coin">H</span>
+                  <span class="choice-label">Heads</span>
+                </span>
+              </label>
+              <label class="choice">
+                <input type="radio" name="choice" value="tails" />
+                <span class="choice-card">
+                  <span class="choice-coin tails">T</span>
+                  <span class="choice-label">Tails</span>
+                </span>
+              </label>
+            </fieldset>
+
+            <label class="field">
+              <span class="field-label">Wager ($)</span>
+              <input class="input" type="number" name="wager"
+                     min="1" max="100" step="1" required />
+              <span class="field-hint" id="wager-hint">
+                Between $<span data-config="MIN_WAGER">1</span>
+                and $<span data-config="MAX_WAGER">100</span>.
+              </span>
+            </label>
+
+            <button class="btn btn-primary btn-block" type="submit"
+                    data-loading-text="Creating...">
+              Create game
+            </button>
+          </form>
+        </section>
+
+        <!-- How to play card -->
+        <section class="card">
+          <header class="card-head">
+            <h2>How to play</h2>
+          </header>
+          <ol class="howto">
+            <li>Create an account and get $<span data-config="STARTING_BALANCE">100</span> in fake money.</li>
+            <li>Create a coinflip by choosing heads or tails and a wager.</li>
+            <li>Another player joins your game.</li>
+            <li>The server flips the coin fairly.</li>
+            <li>Winner takes the wager amount from the loser.</li>
+            <li>Climb the leaderboard.</li>
+          </ol>
+        </section>
+
+        <!-- Open games card -->
+        <section class="card card-wide">
+          <header class="card-head card-head-row">
+            <div>
+              <h2>Open games</h2>
+              <p class="muted">Find a flip you want to take.</p>
+            </div>
+            <button class="btn btn-ghost" id="refresh-games-btn"
+                    data-loading-text="Refreshing...">
+              ↻ Refresh
+            </button>
+          </header>
+
+          <div class="filters">
+            <label class="filter">
+              <span class="field-label">Exact</span>
+              <input class="input input-sm" type="number" id="filter-wager"
+                     placeholder="any" min="0" step="1" />
+            </label>
+            <label class="filter">
+              <span class="field-label">Min</span>
+              <input class="input input-sm" type="number" id="filter-min"
+                     placeholder="0" min="0" step="1" />
+            </label>
+            <label class="filter">
+              <span class="field-label">Max</span>
+              <input class="input input-sm" type="number" id="filter-max"
+                     placeholder="∞" min="0" step="1" />
+            </label>
+            <button class="btn btn-ghost btn-sm" id="apply-filters-btn">Apply</button>
+            <button class="btn btn-ghost btn-sm" id="clear-filters-btn">Clear</button>
+          </div>
+
+          <div class="games-list" id="games-list">
+            <!-- Game rows injected here -->
+          </div>
+
+          <div class="empty-state" id="games-empty" hidden>
+            <p>No open games match your filters.</p>
+            <p class="muted">Create one above, or check back in a few seconds.</p>
+          </div>
+
+          <div class="loading-row" id="games-loading" hidden>
+            Loading games…
+          </div>
+        </section>
+
+        <!-- Leaderboard card -->
+        <section class="card card-wide">
+          <header class="card-head card-head-row">
+            <div>
+              <h2>Leaderboard</h2>
+              <p class="muted">Top 50 by balance.</p>
+            </div>
+            <button class="btn btn-ghost" id="refresh-leaderboard-btn"
+                    data-loading-text="Refreshing...">
+              ↻ Refresh
+            </button>
+          </header>
+          <div class="leaderboard" id="leaderboard">
+            <!-- Rows injected here -->
+          </div>
+          <div class="empty-state" id="leaderboard-empty" hidden>
+            <p>No players yet.</p>
+          </div>
+        </section>
+
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ============================ FLIP MODAL ============================ -->
+  <div class="modal-backdrop" id="flip-modal" hidden aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="flip-title">
+      <h2 id="flip-title" class="flip-title">Flipping the coin…</h2>
+
+      <div class="coin-stage">
+        <div class="coin coin-xl" id="flip-coin" aria-hidden="true">
+          <div class="coin-face coin-heads">H</div>
+          <div class="coin-face coin-tails">T</div>
+        </div>
+      </div>
+
+      <p class="flip-sub" id="flip-sub">Server is choosing the result…</p>
+
+      <!-- Result panel (revealed after the flip) -->
+      <div class="flip-result" id="flip-result" hidden>
+        <div class="result-row">
+          <span class="muted">Result</span>
+          <strong id="result-side">—</strong>
+        </div>
+        <div class="result-row">
+          <span class="muted">Winner</span>
+          <strong id="result-winner">—</strong>
+        </div>
+        <div class="result-row">
+          <span class="muted">Amount</span>
+          <strong id="result-amount">$0</strong>
+        </div>
+        <div class="result-row">
+          <span class="muted">New balance</span>
+          <strong id="result-balance">$0</strong>
+        </div>
+        <button class="btn btn-primary btn-block" id="flip-close-btn">Done</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Templates -->
+  <template id="tpl-game-row">
+    <article class="game-row">
+      <div class="game-row-main">
+        <span class="game-creator"></span>
+        <span class="game-choice-pill"></span>
+      </div>
+      <div class="game-row-meta">
+        <span class="game-wager"></span>
+        <span class="game-time muted"></span>
+      </div>
+      <button class="btn btn-primary btn-sm game-join-btn"
+              data-loading-text="Joining...">Join</button>
+    </article>
+  </template>
+
+  <template id="tpl-leaderboard-row">
+    <div class="lb-row">
+      <span class="lb-rank"></span>
+      <span class="lb-name"></span>
+      <span class="lb-balance"></span>
+    </div>
+  </template>
+
+  <!-- Scripts: config first, then app. -->
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

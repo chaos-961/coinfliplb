@@ -1,0 +1,584 @@
+/* =====================================================================
+   CoinFlip Arena — styles.css
+   ---------------------------------------------------------------------
+   Dark, modern, minimal. Mobile-first; the layout becomes a 2-column
+   grid on wider screens. The 3D coin uses CSS transforms.
+   ===================================================================== */
+
+/* --- Tokens ---------------------------------------------------------- */
+:root {
+  --bg:           #0b0d12;
+  --bg-elev:      #131722;
+  --bg-elev-2:    #1a1f2e;
+  --line:         #232a3b;
+  --line-2:       #2c3447;
+  --text:         #e6e9f2;
+  --text-dim:     #9aa3b8;
+  --text-mute:    #6b7388;
+
+  --primary:      #6c8cff;
+  --primary-hi:   #87a2ff;
+  --primary-ink:  #0b0d12;
+
+  --gold:         #f5b301;
+  --gold-deep:    #b88600;
+  --gold-shadow:  #6e5000;
+
+  --danger:       #ff5a6a;
+  --success:      #34d399;
+
+  --radius:       14px;
+  --radius-sm:    10px;
+  --radius-lg:    20px;
+
+  --shadow:       0 8px 24px rgba(0, 0, 0, 0.35);
+  --shadow-soft:  0 4px 14px rgba(0, 0, 0, 0.25);
+
+  --transition:   200ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+/* --- Base ------------------------------------------------------------ */
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto,
+               "Helvetica Neue", Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  font-size: 15px;
+  line-height: 1.5;
+  min-height: 100vh;
+}
+
+body {
+  background:
+    radial-gradient(1200px 600px at 20% -10%, rgba(108, 140, 255, 0.10), transparent 60%),
+    radial-gradient(900px 500px at 110% 10%, rgba(245, 179, 1, 0.06), transparent 60%),
+    var(--bg);
+}
+
+h1, h2, h3 { margin: 0; font-weight: 700; letter-spacing: -0.01em; }
+h2 { font-size: 1.15rem; }
+p  { margin: 0; }
+a  { color: var(--primary-hi); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+button { font-family: inherit; }
+
+.muted { color: var(--text-dim); font-size: 0.9rem; }
+
+.visually-hidden {
+  position: absolute !important; clip: rect(1px,1px,1px,1px);
+  width: 1px; height: 1px; overflow: hidden; white-space: nowrap;
+}
+
+/* --- Layout ---------------------------------------------------------- */
+.topbar {
+  position: sticky; top: 0; z-index: 30;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 20px;
+  background: rgba(11, 13, 18, 0.78);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--line);
+}
+
+.brand {
+  display: flex; align-items: center; gap: 10px;
+  font-weight: 700; letter-spacing: -0.01em;
+}
+.brand-coin { font-size: 1.35rem; }
+.brand-name { font-size: 1.05rem; }
+
+.topbar-right {
+  display: flex; align-items: center; gap: 10px;
+}
+
+.user-name {
+  color: var(--text-dim);
+  font-size: 0.92rem;
+  max-width: 140px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+.balance-pill {
+  display: inline-flex; align-items: baseline; gap: 6px;
+  padding: 6px 12px;
+  background: linear-gradient(180deg, rgba(245,179,1,0.18), rgba(245,179,1,0.08));
+  border: 1px solid rgba(245,179,1,0.35);
+  border-radius: 999px;
+  font-size: 0.92rem;
+}
+.balance-label { color: var(--gold); font-weight: 600; }
+.balance-amount { font-weight: 700; }
+
+.main {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 24px 20px 80px;
+}
+
+/* --- Views ----------------------------------------------------------- */
+.view { animation: fade-in 200ms ease-out; }
+
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* --- Hero / landing -------------------------------------------------- */
+.hero {
+  text-align: center;
+  padding: 36px 12px 24px;
+  max-width: 640px; margin: 0 auto;
+}
+.hero-coin { display: flex; justify-content: center; margin-bottom: 28px; }
+.hero-title {
+  font-size: clamp(2rem, 5vw, 2.75rem);
+  margin-bottom: 12px;
+}
+.hero-sub {
+  color: var(--text-dim);
+  margin-bottom: 28px;
+  font-size: 1.05rem;
+}
+.hero-actions {
+  display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;
+  margin-bottom: 36px;
+}
+.hero-points {
+  list-style: none; padding: 0; margin: 0;
+  display: flex; flex-direction: column; gap: 10px;
+  align-items: flex-start; max-width: 360px;
+  margin-left: auto; margin-right: auto;
+  text-align: left;
+}
+.hero-points li { display: flex; align-items: center; gap: 10px; color: var(--text-dim); }
+.hero-points .dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--primary);
+  box-shadow: 0 0 12px var(--primary);
+}
+
+/* --- Cards ----------------------------------------------------------- */
+.card {
+  background: var(--bg-elev);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  box-shadow: var(--shadow-soft);
+}
+.card-head { margin-bottom: 14px; }
+.card-head h2 { margin-bottom: 4px; }
+.card-head-row {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: 12px; flex-wrap: wrap;
+}
+
+.dash-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+}
+@media (min-width: 880px) {
+  .dash-grid { grid-template-columns: 1fr 1fr; }
+  .card-wide { grid-column: 1 / -1; }
+}
+
+/* --- Auth card ------------------------------------------------------- */
+.auth-card {
+  max-width: 420px;
+  margin: 32px auto 0;
+}
+.tabs {
+  display: flex; gap: 6px; padding: 4px;
+  background: var(--bg-elev-2);
+  border-radius: var(--radius);
+  margin-bottom: 20px;
+}
+.tab {
+  flex: 1; padding: 10px 12px;
+  background: transparent; color: var(--text-dim);
+  border: none; border-radius: var(--radius-sm);
+  cursor: pointer; font-weight: 600;
+  transition: var(--transition);
+}
+.tab.active {
+  background: var(--bg-elev);
+  color: var(--text);
+  box-shadow: var(--shadow-soft);
+}
+.auth-form { display: flex; flex-direction: column; gap: 14px; }
+.auth-switch { text-align: center; color: var(--text-dim); font-size: 0.9rem; }
+.auth-back { text-align: center; margin-top: 18px; font-size: 0.9rem; }
+.auth-back a { color: var(--text-dim); }
+
+/* --- Forms / inputs -------------------------------------------------- */
+.field { display: flex; flex-direction: column; gap: 6px; }
+.field-label {
+  font-size: 0.82rem; font-weight: 600;
+  color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.04em;
+}
+.field-hint { font-size: 0.8rem; color: var(--text-mute); }
+
+.input {
+  background: var(--bg-elev-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 11px 12px;
+  color: var(--text);
+  font-size: 0.98rem;
+  outline: none;
+  transition: var(--transition);
+  width: 100%;
+}
+.input:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(108, 140, 255, 0.18);
+}
+.input::placeholder { color: var(--text-mute); }
+.input-sm { padding: 8px 10px; font-size: 0.9rem; }
+
+/* --- Buttons --------------------------------------------------------- */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 11px 16px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  user-select: none;
+  transition: var(--transition);
+  background: var(--bg-elev-2);
+  color: var(--text);
+  white-space: nowrap;
+}
+.btn:hover:not(:disabled) { transform: translateY(-1px); }
+.btn:active:not(:disabled) { transform: translateY(0); }
+.btn:disabled {
+  opacity: 0.55; cursor: not-allowed; transform: none;
+}
+
+.btn-primary {
+  background: linear-gradient(180deg, var(--primary-hi), var(--primary));
+  color: var(--primary-ink);
+  border-color: var(--primary);
+  box-shadow: 0 4px 14px rgba(108, 140, 255, 0.35);
+}
+.btn-primary:hover:not(:disabled) {
+  box-shadow: 0 6px 20px rgba(108, 140, 255, 0.45);
+}
+
+.btn-ghost {
+  background: transparent;
+  border-color: var(--line-2);
+  color: var(--text);
+}
+.btn-ghost:hover:not(:disabled) {
+  background: var(--bg-elev-2);
+  border-color: var(--line-2);
+}
+
+.btn-block { width: 100%; }
+.btn-lg { padding: 13px 22px; font-size: 1rem; }
+.btn-sm { padding: 7px 12px; font-size: 0.85rem; }
+
+/* --- Choice radios (heads/tails) ------------------------------------- */
+.choice-group {
+  border: 0; padding: 0; margin: 0 0 6px 0;
+  display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+}
+.choice input { position: absolute; opacity: 0; pointer-events: none; }
+.choice-card {
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  padding: 14px 12px;
+  background: var(--bg-elev-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: var(--transition);
+}
+.choice-card:hover { border-color: var(--line-2); }
+.choice input:checked + .choice-card {
+  border-color: var(--primary);
+  background: linear-gradient(180deg, rgba(108,140,255,0.15), rgba(108,140,255,0.05));
+  box-shadow: 0 0 0 3px rgba(108, 140, 255, 0.18);
+}
+.choice input:focus-visible + .choice-card { outline: 2px solid var(--primary); }
+
+.choice-coin {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  background: linear-gradient(180deg, var(--gold), var(--gold-deep));
+  color: var(--gold-shadow);
+  font-weight: 800; font-size: 1rem;
+  box-shadow: inset 0 -2px 0 rgba(0,0,0,0.25), 0 2px 6px rgba(0,0,0,0.3);
+}
+.choice-coin.tails {
+  background: linear-gradient(180deg, #d8dde8, #a4adc1);
+  color: #4a5168;
+}
+.choice-label { font-weight: 600; }
+
+.create-form { display: flex; flex-direction: column; gap: 14px; }
+
+/* --- Filters --------------------------------------------------------- */
+.filters {
+  display: flex; flex-wrap: wrap; gap: 10px;
+  align-items: end;
+  padding: 12px;
+  background: var(--bg-elev-2);
+  border-radius: var(--radius);
+  margin-bottom: 14px;
+}
+.filter { display: flex; flex-direction: column; gap: 4px; min-width: 90px; flex: 1; }
+.filters .btn { align-self: stretch; }
+
+/* --- Game rows ------------------------------------------------------- */
+.games-list { display: flex; flex-direction: column; gap: 10px; }
+
+.game-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 10px 16px;
+  padding: 14px 16px;
+  background: var(--bg-elev-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  transition: var(--transition);
+}
+.game-row:hover { border-color: var(--line-2); }
+
+.game-row-main {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  grid-column: 1 / 2;
+}
+.game-creator { font-weight: 600; }
+.game-choice-pill {
+  font-size: 0.78rem; font-weight: 700;
+  padding: 3px 9px; border-radius: 999px;
+  background: rgba(245, 179, 1, 0.18);
+  color: var(--gold);
+  border: 1px solid rgba(245, 179, 1, 0.35);
+  text-transform: uppercase; letter-spacing: 0.05em;
+}
+.game-choice-pill.tails {
+  background: rgba(154, 163, 184, 0.18);
+  color: #c2c8d4;
+  border-color: rgba(154, 163, 184, 0.35);
+}
+
+.game-row-meta {
+  display: flex; gap: 10px; flex-wrap: wrap; align-items: center;
+  grid-column: 1 / 2;
+  font-size: 0.9rem;
+}
+.game-wager { font-weight: 700; color: var(--gold); }
+
+.game-join-btn { grid-column: 2 / 3; grid-row: 1 / span 2; }
+
+/* --- Leaderboard ----------------------------------------------------- */
+.leaderboard { display: flex; flex-direction: column; gap: 6px; }
+.lb-row {
+  display: grid;
+  grid-template-columns: 48px 1fr auto;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  background: var(--bg-elev-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+.lb-rank {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px;
+  background: var(--bg-elev);
+  border-radius: 50%;
+  font-weight: 700; font-size: 0.9rem;
+  color: var(--text-dim);
+}
+.lb-row.is-me { border-color: var(--primary); }
+.lb-row.top-1 .lb-rank { background: rgba(245,179,1,0.2); color: var(--gold); }
+.lb-row.top-2 .lb-rank { background: rgba(200,200,210,0.2); color: #d6dae6; }
+.lb-row.top-3 .lb-rank { background: rgba(205,127,50,0.18); color: #e3a76f; }
+.lb-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lb-balance { font-weight: 700; color: var(--gold); }
+
+/* --- How to play ----------------------------------------------------- */
+.howto {
+  margin: 0; padding-left: 22px;
+  display: flex; flex-direction: column; gap: 8px;
+  color: var(--text-dim);
+}
+.howto li { line-height: 1.55; }
+.howto li::marker { color: var(--primary); font-weight: 700; }
+
+/* --- Empty / loading ------------------------------------------------- */
+.empty-state {
+  text-align: center; padding: 24px 12px;
+  color: var(--text-dim);
+  border: 1px dashed var(--line-2);
+  border-radius: var(--radius);
+}
+.empty-state p { margin-bottom: 4px; }
+.loading-row {
+  text-align: center; padding: 18px;
+  color: var(--text-dim); font-size: 0.9rem;
+}
+
+/* --- Toasts ---------------------------------------------------------- */
+.toast-stack {
+  position: fixed; top: 14px; right: 14px; z-index: 100;
+  display: flex; flex-direction: column; gap: 8px;
+  max-width: calc(100vw - 28px);
+}
+.toast {
+  background: var(--bg-elev);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--primary);
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow);
+  font-size: 0.92rem;
+  max-width: 360px;
+  animation: toast-in 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.toast.error   { border-left-color: var(--danger); }
+.toast.success { border-left-color: var(--success); }
+@keyframes toast-in {
+  from { opacity: 0; transform: translateX(20px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+/* =====================================================================
+   COIN — 3D flip animation
+   --------------------------------------------------------------------
+   The .coin element has two faces (heads/tails) on opposite sides of
+   a 3D box. Adding .is-flipping spins it. The CSS variable
+   --tick-duration is set per-coin from JS using CONFIG.COIN_FLIP_SPEED_MS.
+   ===================================================================== */
+.coin-stage {
+  display: flex; justify-content: center;
+  padding: 22px 0;
+  perspective: 1000px;
+}
+
+.coin {
+  position: relative;
+  width: 90px; height: 90px;
+  transform-style: preserve-3d;
+}
+.coin-large { width: 140px; height: 140px; }
+.coin-xl    { width: 180px; height: 180px; }
+
+.coin-face {
+  position: absolute; inset: 0;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 900; font-size: 2.6rem;
+  letter-spacing: -0.02em;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  box-shadow:
+    inset 0 -6px 0 rgba(0, 0, 0, 0.22),
+    inset 0 6px 0 rgba(255, 255, 255, 0.18),
+    0 12px 28px rgba(0, 0, 0, 0.45);
+}
+.coin-large .coin-face { font-size: 3.6rem; }
+.coin-xl    .coin-face { font-size: 4.4rem; }
+
+.coin-heads {
+  background:
+    radial-gradient(circle at 30% 25%, #ffe28a 0%, var(--gold) 38%, var(--gold-deep) 100%);
+  color: var(--gold-shadow);
+  border: 2px solid #d4a000;
+}
+.coin-tails {
+  background:
+    radial-gradient(circle at 30% 25%, #f1f4fb 0%, #c5cad8 40%, #8a92a8 100%);
+  color: #3a4055;
+  border: 2px solid #6e7591;
+  transform: rotateY(180deg);
+}
+
+/* Idle hover spin on the landing-page coin */
+.coin-large {
+  animation: idle-spin 6s linear infinite;
+}
+@keyframes idle-spin {
+  0%   { transform: rotateY(0deg); }
+  100% { transform: rotateY(360deg); }
+}
+
+/* While flipping: rapid spin via short loops. The duration is set
+   inline by JS so CONFIG.COIN_FLIP_SPEED_MS controls the speed. */
+.coin.is-flipping {
+  animation: flip-spin var(--tick-duration, 120ms) linear infinite;
+}
+@keyframes flip-spin {
+  0%   { transform: rotateY(0deg)   rotateX(8deg); }
+  100% { transform: rotateY(360deg) rotateX(8deg); }
+}
+
+/* Settling positions */
+.coin.show-heads { animation: none !important; transform: rotateY(0deg); transition: transform 400ms cubic-bezier(.2,.8,.2,1); }
+.coin.show-tails { animation: none !important; transform: rotateY(180deg); transition: transform 400ms cubic-bezier(.2,.8,.2,1); }
+
+/* --- Modal ----------------------------------------------------------- */
+.modal-backdrop {
+  position: fixed; inset: 0; z-index: 80;
+  background: rgba(5, 7, 12, 0.72);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  display: flex; align-items: center; justify-content: center;
+  padding: 20px;
+  animation: fade-in 200ms ease-out;
+}
+.modal {
+  background: var(--bg-elev);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: 26px 24px;
+  width: 100%; max-width: 440px;
+  box-shadow: var(--shadow);
+  animation: modal-in 260ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  text-align: center;
+}
+@keyframes modal-in {
+  from { opacity: 0; transform: scale(0.95); }
+  to   { opacity: 1; transform: scale(1); }
+}
+.flip-title { font-size: 1.4rem; margin-bottom: 4px; }
+.flip-sub   { color: var(--text-dim); margin: 6px 0 4px; min-height: 22px; }
+
+.flip-result {
+  margin-top: 18px;
+  display: flex; flex-direction: column; gap: 10px;
+  text-align: left;
+}
+.result-row {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 10px 14px;
+  background: var(--bg-elev-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+.result-row.win  { border-color: rgba(52, 211, 153, 0.45); }
+.result-row.lose { border-color: rgba(255, 90, 106, 0.4); }
+.flip-result .btn { margin-top: 8px; }
+
+/* --- Mobile tweaks --------------------------------------------------- */
+@media (max-width: 520px) {
+  .topbar { padding: 12px 14px; }
+  .main { padding: 16px 14px 80px; }
+  .user-name { display: none; }
+  .balance-pill { font-size: 0.85rem; padding: 5px 10px; }
+  .game-row { grid-template-columns: 1fr; }
+  .game-join-btn { grid-column: 1 / -1; grid-row: auto; }
+}
