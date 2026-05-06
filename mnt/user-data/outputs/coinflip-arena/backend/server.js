@@ -545,12 +545,17 @@ app.post('/api/games/:id/join', requireAuth, async (req, res) => {
       [game.id]
     );
 
-    // Also return the joiner's fresh balance so the UI can update.
-    const balRes = await db.query('SELECT balance FROM users WHERE id = $1', [req.user.id]);
+    // Also return the joiner's fresh user record so the UI can update.
+    const userRes = await db.query(
+      'SELECT id, username, balance, created_at FROM users WHERE id = $1',
+      [req.user.id]
+    );
 
     return res.json({
       game: publicGame(finalRes.rows[0]),
-      balance: Number(balRes.rows[0].balance),
+      user: publicUser(userRes.rows[0]),
+      // Kept for compatibility with older frontend builds.
+      balance: Number(userRes.rows[0].balance),
     });
 
   } catch (err) {

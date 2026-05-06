@@ -23,7 +23,7 @@ window.CONFIG = Object.freeze({
 
   // ----- Wager limits (UI clamping; backend enforces > 0 & ≤ balance)
   MIN_WAGER: 1,
-  MAX_WAGER: 1000000000000000,
+  MAX_WAGER: 1000000,
 
   // ----- Flip animation ----------------------------------------------
   // Total time the flip modal animates before revealing the result.

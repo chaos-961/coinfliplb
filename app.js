@@ -44,6 +44,39 @@
   // once the DOM is parsed. Keeps the boot flow tidy.
   const els = {};
 
+  function on(el, eventName, handler, options) {
+    if (!el) {
+      console.warn(`[wireEvents] Missing element for ${eventName}; listener was skipped.`);
+      return;
+    }
+    el.addEventListener(eventName, handler, options);
+  }
+
+  function assertRequiredElements() {
+    const required = [
+      'topbar', 'balancePill', 'balanceValue', 'userName', 'logoutBtn',
+      'viewAuth', 'viewDashboard',
+      'formLogin', 'formSignup', 'loginUsername', 'loginPassword',
+      'signupUsername', 'signupPassword', 'signupConfirm', 'loginBtn', 'signupBtn',
+      'loginFeedback', 'signupFeedback',
+      'resultBanner', 'resultBannerTitle', 'resultBannerSub', 'resultBannerClose',
+      'formCreateGame', 'wagerInput', 'createBtn', 'createFeedback',
+      'gamesRows', 'gamesEmpty', 'gamesLoading', 'filterMin', 'filterMax',
+      'applyFilters', 'clearFilters', 'refreshGames',
+      'myRows', 'myEmpty', 'myLoading', 'refreshMy',
+      'lbRows', 'lbEmpty', 'lbLoading', 'refreshLb',
+      'flipModal', 'flipCoin', 'flipCoinInner', 'flipSub', 'flipResult',
+      'resultSide', 'resultPick', 'resultOutcome', 'resultAmount', 'resultBalance',
+      'flipCloseBtn', 'tplGameRow', 'tplMyRow', 'tplLbRow',
+    ];
+    const missing = required.filter(name => !els[name]);
+    if (missing.length) {
+      console.error(`[boot] Missing required DOM element(s): ${missing.join(', ')}. Check index.html IDs/classes.`);
+      return false;
+    }
+    return true;
+  }
+
   function captureElements() {
     Object.assign(els, {
       // Topbar
@@ -235,6 +268,7 @@
   function formatRelative(dateInput) {
     if (!dateInput) return '';
     const date = (dateInput instanceof Date) ? dateInput : new Date(dateInput);
+    if (Number.isNaN(date.getTime())) return '';
     const sec = Math.max(0, Math.floor((Date.now() - date.getTime()) / 1000));
     if (sec < 5) return 'just now';
     if (sec < 60) return `${sec}s ago`;
@@ -269,10 +303,10 @@
   function updateTopbar() {
     const signedIn = !!state.user;
     if (!signedIn) {
-      els.topbar.hidden = true;
-      els.balancePill.hidden = true;
-      els.userName.hidden = true;
-      els.logoutBtn.hidden = true;
+      if (els.topbar) els.topbar.hidden = true;
+      if (els.balancePill) els.balancePill.hidden = true;
+      if (els.userName) els.userName.hidden = true;
+      if (els.logoutBtn) els.logoutBtn.hidden = true;
       return;
     }
     els.topbar.hidden = false;
@@ -345,8 +379,9 @@
       showFeedback(els.signupFeedback, 'Username must be 3–32 characters: letters, numbers, dot, underscore, or hyphen.', 'error');
       return;
     }
-    if (password.length < CONFIG.MIN_PASSWORD_LENGTH) {
-      showFeedback(els.signupFeedback, `Password must be at least ${CONFIG.MIN_PASSWORD_LENGTH} characters.`, 'error');
+    const minPasswordLength = Number(CONFIG.MIN_PASSWORD_LENGTH) || 6;
+    if (password.length < minPasswordLength) {
+      showFeedback(els.signupFeedback, `Password must be at least ${minPasswordLength} characters.`, 'error');
       return;
     }
     if (password !== confirm) {
@@ -448,7 +483,7 @@
       refreshMyGames().catch(() => {});
       // Light refresh of "me" so the balance pill stays current
       refreshMe().catch(() => {});
-    }, CONFIG.POLLING_INTERVAL_MS);
+    }, Math.max(5000, Number(CONFIG.POLLING_INTERVAL_MS) || 60000));
   }
   function stopPolling() {
     if (state.pollTimer) clearInterval(state.pollTimer);
@@ -505,15 +540,17 @@
 
       const joinBtn = $('.game-row-join', node);
       const isOwn = (g.creator_id === myId);
-      const insufficient = (g.wager > myBalance);
-      if (isOwn) {
-        joinBtn.disabled = true;
-        joinBtn.textContent = 'Your game';
-      } else if (insufficient) {
-        joinBtn.disabled = true;
-        joinBtn.textContent = 'Insufficient';
-      } else {
-        joinBtn.addEventListener('click', () => handleJoinGame(g.id, joinBtn));
+      const insufficient = (Number(g.wager) > myBalance);
+      if (joinBtn) {
+        if (isOwn) {
+          joinBtn.disabled = true;
+          joinBtn.textContent = 'Your game';
+        } else if (insufficient) {
+          joinBtn.disabled = true;
+          joinBtn.textContent = 'Insufficient';
+        } else {
+          on(joinBtn, 'click', () => handleJoinGame(g.id, joinBtn));
+        }
       }
       frag.appendChild(node);
     });
@@ -759,8 +796,10 @@
       showFeedback(els.createFeedback, 'Pick heads or tails.', 'error');
       return;
     }
-    if (!Number.isFinite(wager) || wager < CONFIG.MIN_WAGER || wager > CONFIG.MAX_WAGER) {
-      showFeedback(els.createFeedback, `Wager must be between $${CONFIG.MIN_WAGER} and $${CONFIG.MAX_WAGER}.`, 'error');
+    const minWager = Number(CONFIG.MIN_WAGER) || 1;
+    const maxWager = Number(CONFIG.MAX_WAGER) || Number.MAX_SAFE_INTEGER;
+    if (!Number.isFinite(wager) || wager < minWager || wager > maxWager) {
+      showFeedback(els.createFeedback, `Wager must be between $${minWager} and $${maxWager}.`, 'error');
       return;
     }
     if (state.user && wager > Number(state.user.balance)) {
@@ -874,7 +913,8 @@
     els.resultPick.textContent    = capitalize(myPick);
     els.resultOutcome.textContent = won ? 'You won' : 'You lost';
     els.resultAmount.textContent  = (won ? '+' : '−') + formatMoney(wager);
-    els.resultBalance.textContent = formatMoney(data.user.balance);
+    const newBalance = data.user ? data.user.balance : data.balance;
+    els.resultBalance.textContent = formatMoney(newBalance);
 
     // Color the result rows
     const allRows = els.flipResult.querySelectorAll('.result-row');
@@ -886,9 +926,13 @@
 
     els.flipResult.hidden = false;
 
-    // Update local user balance from server response
+    // Update local user balance from server response. Older backend responses
+    // returned { balance }; newer ones may return { user }.
     if (data.user) {
       state.user = data.user;
+      updateTopbar();
+    } else if (state.user && Number.isFinite(Number(data.balance))) {
+      state.user = { ...state.user, balance: Number(data.balance) };
       updateTopbar();
     }
     // The game is now in completed state — record it as already seen so
@@ -914,40 +958,40 @@
   function wireEvents() {
     // Auth tabs
     els.authTabs.forEach(t => {
-      t.addEventListener('click', () => switchAuthTab(t.dataset.authTab));
+      on(t, 'click', () => switchAuthTab(t.dataset.authTab));
     });
     // Main tabs
     els.mainTabs.forEach(t => {
-      t.addEventListener('click', () => switchMainTab(t.dataset.mainTab));
+      on(t, 'click', () => switchMainTab(t.dataset.mainTab));
     });
 
     // Auth forms
-    els.formLogin.addEventListener('submit', handleLogin);
-    els.formSignup.addEventListener('submit', handleSignup);
-    els.logoutBtn.addEventListener('click', handleLogout);
+    on(els.formLogin, 'submit', handleLogin);
+    on(els.formSignup, 'submit', handleSignup);
+    on(els.logoutBtn, 'click', handleLogout);
 
     // Create
-    els.formCreateGame.addEventListener('submit', handleCreateGame);
+    on(els.formCreateGame, 'submit', handleCreateGame);
 
     // Open games filters / refresh
-    els.applyFilters.addEventListener('click', applyFilters);
-    els.clearFilters.addEventListener('click', clearFilters);
-    els.refreshGames.addEventListener('click', () => refreshOpenGames());
+    on(els.applyFilters, 'click', applyFilters);
+    on(els.clearFilters, 'click', clearFilters);
+    on(els.refreshGames, 'click', () => refreshOpenGames());
 
     // My games refresh
-    els.refreshMy.addEventListener('click', () => refreshMyGames());
+    on(els.refreshMy, 'click', () => refreshMyGames());
 
     // Leaderboard refresh
-    els.refreshLb.addEventListener('click', () => refreshLeaderboard());
+    on(els.refreshLb, 'click', () => refreshLeaderboard());
 
     // Result banner
-    els.resultBannerClose.addEventListener('click', hideResultBanner);
+    on(els.resultBannerClose, 'click', hideResultBanner);
 
     // Flip modal close
-    els.flipCloseBtn.addEventListener('click', closeFlipModal);
+    on(els.flipCloseBtn, 'click', closeFlipModal);
 
     // [data-action] navigation
-    document.body.addEventListener('click', (e) => {
+    on(document.body, 'click', (e) => {
       const t = e.target.closest('[data-action]');
       if (!t) return;
       const action = t.getAttribute('data-action');
@@ -958,7 +1002,7 @@
     });
 
     // Refresh data when tab becomes visible again
-    document.addEventListener('visibilitychange', () => {
+    on(document, 'visibilitychange', () => {
       if (document.hidden) return;
       if (!state.user) return;
       refreshOpenGames().catch(() => {});
@@ -971,6 +1015,10 @@
   // -------------------------------------------------------------------
   async function boot() {
     captureElements();
+    if (!assertRequiredElements()) {
+      document.body.dataset.config = 'error';
+      return;
+    }
     wireEvents();
     document.body.dataset.config = 'ready';
 
@@ -990,7 +1038,7 @@
   }
 
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', boot);
+    on(document, 'DOMContentLoaded', boot);
   } else {
     boot();
   }
