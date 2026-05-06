@@ -1,207 +1,252 @@
-// =====================================================================
-// app.js — CoinFlip Arena frontend logic
-// ---------------------------------------------------------------------
-// All UI logic lives here. Anything sensitive (game results, balances,
-// authentication) is delegated to the backend via the REST API. The
-// frontend never decides who wins; it only renders what the server says.
-//
-// Auth token is kept in localStorage. For an MVP this is acceptable —
-// in production you would prefer an HttpOnly cookie session, but that
-// requires a backend that lives on the same domain (or a fancier CORS
-// + cookie setup). See the project README for the rationale.
-// =====================================================================
-
+/* =====================================================================
+   CoinFlip LB — app.js
+   ---------------------------------------------------------------------
+   Single-file SPA logic. No frameworks.
+   - Inline feedback (no toast popups)
+   - Auth view default, with confirm-password on signup
+   - Dashboard with tabs: Open games / My games / Leaderboard
+   - Result banner when one of the user's open games is joined+completed
+   - Multi-stage 3D coin flip animation
+   ===================================================================== */
 (function () {
   'use strict';
 
   // -------------------------------------------------------------------
-  // State
+  // Constants & state
   // -------------------------------------------------------------------
+  const CONFIG = window.CONFIG;
+  if (!CONFIG || !CONFIG.API_BASE_URL) {
+    console.error('CONFIG missing or invalid. Check config.js loads before app.js.');
+    return;
+  }
+  const API = String(CONFIG.API_BASE_URL).replace(/\/+$/, '');
+  const TOKEN_KEY = 'cfa_token';
+
   const state = {
-    token: localStorage.getItem('cfa_token') || null,
-    user:  null,                    // {id, username, balance}
-    pollTimer: null,
-    activeFilters: { wager: null, minWager: null, maxWager: null },
-    isFlipping: false,
-  };
-
-  // Cache DOM lookups
-  const $  = (sel, root = document) => root.querySelector(sel);
-  const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
-
-  const els = {
-    // Topbar
-    brandName:    $('#brand-name'),
-    balancePill:  $('#balance-pill'),
-    balanceAmount:$('#balance-amount'),
-    userName:     $('#user-name'),
-    logoutBtn:    $('#logout-btn'),
-
-    // Views
-    viewLanding:  $('#view-landing'),
-    viewAuth:     $('#view-auth'),
-    viewDashboard:$('#view-dashboard'),
-
-    // Auth
-    tabLogin:     $('#tab-login'),
-    tabSignup:    $('#tab-signup'),
-    formLogin:    $('#form-login'),
-    formSignup:   $('#form-signup'),
-
-    // Create game
-    formCreate:   $('#form-create-game'),
-    wagerHint:    $('#wager-hint'),
-
-    // Games list
-    gamesList:    $('#games-list'),
-    gamesEmpty:   $('#games-empty'),
-    gamesLoading: $('#games-loading'),
-    refreshGames: $('#refresh-games-btn'),
-
-    // Filters
-    filterWager:  $('#filter-wager'),
-    filterMin:    $('#filter-min'),
-    filterMax:    $('#filter-max'),
-    applyFilters: $('#apply-filters-btn'),
-    clearFilters: $('#clear-filters-btn'),
-
-    // Leaderboard
-    leaderboard:      $('#leaderboard'),
-    leaderboardEmpty: $('#leaderboard-empty'),
-    refreshLb:        $('#refresh-leaderboard-btn'),
-
-    // Flip modal
-    flipModal:    $('#flip-modal'),
-    flipTitle:    $('#flip-title'),
-    flipSub:      $('#flip-sub'),
-    flipCoin:     $('#flip-coin'),
-    flipResult:   $('#flip-result'),
-    resultSide:   $('#result-side'),
-    resultWinner: $('#result-winner'),
-    resultAmount: $('#result-amount'),
-    resultBalance:$('#result-balance'),
-    flipClose:    $('#flip-close-btn'),
-
-    // Toasts
-    toastStack:   $('#toast-stack'),
-
-    // Templates
-    tplGameRow:    $('#tpl-game-row'),
-    tplLbRow:      $('#tpl-leaderboard-row'),
+    token:          localStorage.getItem(TOKEN_KEY) || null,
+    user:           null,
+    activeAuthTab:  'login',
+    activeMainTab:  'lobby',
+    filters:        {},                // { minWager, maxWager }
+    isFlipping:     false,
+    pollTimer:      null,
+    seenCompletedIds: null,             // Set or null (null = not initialized)
+    lastBannerGameId: null,
   };
 
   // -------------------------------------------------------------------
-  // Apply CONFIG values into the page
+  // DOM helpers
   // -------------------------------------------------------------------
-  function applyConfigToDOM() {
-    document.title = CONFIG.APP_NAME;
-    if (els.brandName) els.brandName.textContent = CONFIG.APP_NAME;
+  const $  = (s, root = document) => root.querySelector(s);
+  const $$ = (s, root = document) => Array.from(root.querySelectorAll(s));
 
-    $$('[data-config]').forEach(el => {
-      const key = el.getAttribute('data-config');
-      if (CONFIG[key] !== undefined) el.textContent = CONFIG[key];
+  // We grab elements lazily inside an "els" object that gets populated
+  // once the DOM is parsed. Keeps the boot flow tidy.
+  const els = {};
+
+  function captureElements() {
+    Object.assign(els, {
+      // Topbar
+      topbar:       $('#topbar'),
+      brandName:    $('#brand-name'),
+      balancePill:  $('#balance-pill'),
+      balanceValue: $('#balance-value'),
+      userName:     $('#user-name'),
+      logoutBtn:    $('#logout-btn'),
+
+      // Views
+      viewAuth:      $('#view-auth'),
+      viewDashboard: $('#view-dashboard'),
+
+      // Auth forms
+      formLogin:        $('#form-login'),
+      formSignup:       $('#form-signup'),
+      loginUsername:    $('#login-username'),
+      loginPassword:    $('#login-password'),
+      signupUsername:   $('#signup-username'),
+      signupPassword:   $('#signup-password'),
+      signupConfirm:    $('#signup-confirm'),
+      loginBtn:         $('#login-btn'),
+      signupBtn:        $('#signup-btn'),
+      loginFeedback:    $('#login-feedback'),
+      signupFeedback:   $('#signup-feedback'),
+
+      // Result banner
+      resultBanner:      $('#result-banner'),
+      resultBannerCoin:  $('#result-banner-coin'),
+      resultBannerTitle: $('#result-banner-title'),
+      resultBannerSub:   $('#result-banner-sub'),
+      resultBannerClose: $('#result-banner-close'),
+
+      // Create form
+      formCreateGame: $('#form-create-game'),
+      wagerInput:     $('#wager-input'),
+      createBtn:      $('#create-btn'),
+      createFeedback: $('#create-feedback'),
+
+      // Tabs
+      mainTabs:    $$('.main-tabs .tab'),
+      authTabs:    $$('.auth-tabs .tab'),
+      myGamesBadge: $('#my-games-badge'),
+
+      // Panels
+      panelLobby:       $('#panel-lobby'),
+      panelMy:          $('#panel-my'),
+      panelLeaderboard: $('#panel-leaderboard'),
+
+      // Lobby panel
+      gamesRows:    $('#games-rows'),
+      gamesEmpty:   $('#games-empty'),
+      gamesLoading: $('#games-loading'),
+      filterMin:    $('#filter-min'),
+      filterMax:    $('#filter-max'),
+      applyFilters: $('#apply-filters'),
+      clearFilters: $('#clear-filters'),
+      refreshGames: $('#refresh-games'),
+
+      // My panel
+      myRows:    $('#my-rows'),
+      myEmpty:   $('#my-empty'),
+      myLoading: $('#my-loading'),
+      refreshMy: $('#refresh-my'),
+
+      // Leaderboard panel
+      lbRows:    $('#lb-rows'),
+      lbEmpty:   $('#lb-empty'),
+      lbLoading: $('#lb-loading'),
+      refreshLb: $('#refresh-lb'),
+
+      // Flip modal
+      flipModal:     $('#flip-modal'),
+      flipCoin:      $('#flip-coin'),
+      flipCoinInner: $('#flip-coin-inner'),
+      flipSub:       $('#flip-sub'),
+      flipResult:    $('#flip-result'),
+      resultSide:    $('#result-side'),
+      resultPick:    $('#result-pick'),
+      resultOutcome: $('#result-outcome'),
+      resultAmount:  $('#result-amount'),
+      resultBalance: $('#result-balance'),
+      flipCloseBtn:  $('#flip-close-btn'),
+
+      // Templates
+      tplGameRow: $('#tpl-game-row'),
+      tplMyRow:   $('#tpl-my-row'),
+      tplLbRow:   $('#tpl-lb-row'),
     });
 
-    // Apply wager bounds to the create-game input.
-    const wagerInput = els.formCreate?.elements?.wager;
-    if (wagerInput) {
-      wagerInput.min = CONFIG.MIN_WAGER;
-      wagerInput.max = CONFIG.MAX_WAGER;
-    }
-  }
-
-  // -------------------------------------------------------------------
-  // Toasts
-  // -------------------------------------------------------------------
-  function toast(message, type = 'info', timeout = 4500) {
-    const el = document.createElement('div');
-    el.className = `toast ${type}`;
-    el.textContent = message;
-    els.toastStack.appendChild(el);
-    setTimeout(() => {
-      el.style.opacity = '0';
-      el.style.transform = 'translateX(20px)';
-      setTimeout(() => el.remove(), 200);
-    }, timeout);
+    if (els.brandName) els.brandName.textContent = CONFIG.APP_NAME;
   }
 
   // -------------------------------------------------------------------
   // API helper
   // -------------------------------------------------------------------
   class ApiError extends Error {
-    constructor(message, status) { super(message); this.status = status; }
+    constructor(message, status, data) {
+      super(message);
+      this.name = 'ApiError';
+      this.status = status;
+      this.data = data;
+    }
   }
 
-  async function api(path, { method = 'GET', body, auth = true } = {}) {
-    const headers = { 'Content-Type': 'application/json' };
-    if (auth && state.token) headers['Authorization'] = `Bearer ${state.token}`;
+  async function api(path, opts = {}) {
+    const headers = Object.assign(
+      { 'Accept': 'application/json' },
+      opts.headers || {}
+    );
+    if (opts.body && !(opts.body instanceof FormData)) {
+      headers['Content-Type'] = headers['Content-Type'] || 'application/json';
+    }
+    if (state.token) {
+      headers['Authorization'] = `Bearer ${state.token}`;
+    }
 
-    let response;
+    let res;
     try {
-      response = await fetch(CONFIG.API_BASE_URL + path, {
-        method,
+      res = await fetch(API + path, {
+        method:  opts.method || 'GET',
         headers,
-        body: body !== undefined ? JSON.stringify(body) : undefined,
+        body:    opts.body,
+        cache:   'no-store',
       });
     } catch (err) {
-      // Network-level failure (CORS, offline, server down, etc.).
-      throw new ApiError("Couldn't reach the server. Check your connection and try again.");
+      throw new ApiError("Couldn't reach the server. Check your connection and try again.", 0, null);
     }
 
     let data = null;
-    try { data = await response.json(); } catch { /* not JSON */ }
+    const ct = res.headers.get('content-type') || '';
+    if (ct.includes('application/json')) {
+      try { data = await res.json(); } catch { data = null; }
+    }
 
-    if (!response.ok) {
-      const msg = (data && data.error) || `Request failed (${response.status}).`;
-      // 401 → token is bad; force logout.
-      if (response.status === 401 && auth) {
+    if (!res.ok) {
+      const msg = (data && data.error) ? data.error : `Request failed (${res.status})`;
+      // Auto-logout on 401 (token expired or invalid)
+      if (res.status === 401 && state.token) {
         clearSession();
-        showAuthLogin();
+        showAuthView();
+        showFeedback(els.loginFeedback, 'Your session expired. Please sign in again.', 'info');
       }
-      throw new ApiError(msg, response.status);
+      throw new ApiError(msg, res.status, data);
     }
     return data;
   }
 
   // -------------------------------------------------------------------
-  // Button loading states
+  // Inline feedback (replaces toast popups)
   // -------------------------------------------------------------------
+  function showFeedback(el, message, type = 'info') {
+    if (!el) return;
+    el.textContent = message;
+    el.classList.remove('is-error', 'is-success', 'is-info');
+    el.classList.add(`is-${type}`);
+    el.hidden = false;
+  }
+  function clearFeedback(el) {
+    if (!el) return;
+    el.hidden = true;
+    el.textContent = '';
+    el.classList.remove('is-error', 'is-success', 'is-info');
+  }
+
   function setLoading(btn, loading) {
     if (!btn) return;
     if (loading) {
-      btn.dataset._origText = btn.textContent;
-      const t = btn.getAttribute('data-loading-text');
-      if (t) btn.textContent = t;
       btn.disabled = true;
+      if (!btn.dataset._origText) btn.dataset._origText = btn.textContent;
+      btn.textContent = 'Working…';
     } else {
-      if (btn.dataset._origText !== undefined) btn.textContent = btn.dataset._origText;
       btn.disabled = false;
-      delete btn.dataset._origText;
+      if (btn.dataset._origText) {
+        btn.textContent = btn.dataset._origText;
+        delete btn.dataset._origText;
+      }
     }
   }
 
   // -------------------------------------------------------------------
-  // View switching
+  // Formatting
   // -------------------------------------------------------------------
-  function showView(name) {
-    els.viewLanding.hidden   = (name !== 'landing');
-    els.viewAuth.hidden      = (name !== 'auth');
-    els.viewDashboard.hidden = (name !== 'dashboard');
-
-    // Stop polling unless we are on the dashboard.
-    if (name !== 'dashboard') stopPolling();
+  function formatMoney(value) {
+    const n = Number(value || 0);
+    return n.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 });
   }
-
-  function showAuthLogin()  { showView('auth'); switchAuthTab('login');  }
-  function showAuthSignup() { showView('auth'); switchAuthTab('signup'); }
-
-  function switchAuthTab(tab) {
-    const isLogin = tab === 'login';
-    els.tabLogin.classList.toggle('active', isLogin);
-    els.tabSignup.classList.toggle('active', !isLogin);
-    els.formLogin.hidden  = !isLogin;
-    els.formSignup.hidden = isLogin;
+  function formatRelative(dateInput) {
+    if (!dateInput) return '';
+    const date = (dateInput instanceof Date) ? dateInput : new Date(dateInput);
+    const sec = Math.max(0, Math.floor((Date.now() - date.getTime()) / 1000));
+    if (sec < 5) return 'just now';
+    if (sec < 60) return `${sec}s ago`;
+    const min = Math.floor(sec / 60);
+    if (min < 60) return `${min}m ago`;
+    const hr  = Math.floor(min / 60);
+    if (hr  < 24) return `${hr}h ago`;
+    const d = Math.floor(hr / 24);
+    if (d < 30) return `${d}d ago`;
+    return date.toLocaleDateString();
   }
+  function capitalize(s) { return s ? s.charAt(0).toUpperCase() + s.slice(1) : s; }
 
   // -------------------------------------------------------------------
   // Session
@@ -209,330 +254,460 @@
   function setSession(token, user) {
     state.token = token;
     state.user  = user;
-    localStorage.setItem('cfa_token', token);
-    renderUser();
+    if (token) localStorage.setItem(TOKEN_KEY, token);
+    updateTopbar();
   }
-
   function clearSession() {
     state.token = null;
     state.user  = null;
-    localStorage.removeItem('cfa_token');
-    renderUser();
+    state.seenCompletedIds = null;
+    state.lastBannerGameId = null;
+    localStorage.removeItem(TOKEN_KEY);
+    stopPolling();
+    updateTopbar();
   }
-
-  function renderUser() {
-    const loggedIn = !!state.user;
-    els.balancePill.hidden = !loggedIn;
-    els.userName.hidden    = !loggedIn;
-    els.logoutBtn.hidden   = !loggedIn;
-    if (loggedIn) {
-      els.userName.textContent      = state.user.username;
-      els.balanceAmount.textContent = formatMoney(state.user.balance);
+  function updateTopbar() {
+    const signedIn = !!state.user;
+    if (!signedIn) {
+      els.topbar.hidden = true;
+      els.balancePill.hidden = true;
+      els.userName.hidden = true;
+      els.logoutBtn.hidden = true;
+      return;
     }
+    els.topbar.hidden = false;
+    els.balancePill.hidden = false;
+    els.balanceValue.textContent = formatMoney(state.user.balance);
+    els.userName.hidden = false;
+    els.userName.textContent = state.user.username;
+    els.logoutBtn.hidden = false;
   }
 
   // -------------------------------------------------------------------
-  // Formatting helpers
+  // View switching
   // -------------------------------------------------------------------
-  function formatMoney(n) {
-    const num = Number(n) || 0;
-    return '$' + num.toLocaleString(undefined, {
-      minimumFractionDigits: 2, maximumFractionDigits: 2,
+  function showAuthView() {
+    els.viewAuth.hidden = false;
+    els.viewDashboard.hidden = true;
+    els.topbar.hidden = !state.user;
+  }
+  function showDashboardView() {
+    els.viewAuth.hidden = true;
+    els.viewDashboard.hidden = false;
+    els.topbar.hidden = false;
+  }
+
+  function switchAuthTab(name) {
+    state.activeAuthTab = name;
+    els.authTabs.forEach(t => {
+      const active = t.dataset.authTab === name;
+      t.classList.toggle('is-active', active);
+      t.setAttribute('aria-selected', active ? 'true' : 'false');
     });
+    els.formLogin.hidden  = (name !== 'login');
+    els.formSignup.hidden = (name !== 'signup');
+    clearFeedback(els.loginFeedback);
+    clearFeedback(els.signupFeedback);
   }
 
-  function formatRelative(iso) {
-    const d = new Date(iso);
-    const diff = (Date.now() - d.getTime()) / 1000;
-    if (diff < 60)    return Math.max(1, Math.floor(diff)) + 's ago';
-    if (diff < 3600)  return Math.floor(diff / 60) + 'm ago';
-    if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
-    return d.toLocaleDateString();
+  function switchMainTab(name) {
+    state.activeMainTab = name;
+    els.mainTabs.forEach(t => {
+      const active = t.dataset.mainTab === name;
+      t.classList.toggle('is-active', active);
+      t.setAttribute('aria-selected', active ? 'true' : 'false');
+    });
+    els.panelLobby.hidden       = (name !== 'lobby');
+    els.panelMy.hidden          = (name !== 'my');
+    els.panelLeaderboard.hidden = (name !== 'leaderboard');
+
+    // Clearing the badge when user opens My Games
+    if (name === 'my') hideMyGamesBadge();
+
+    // Refresh the panel they just opened
+    if (name === 'lobby')       refreshOpenGames().catch(() => {});
+    if (name === 'my')          refreshMyGames().catch(() => {});
+    if (name === 'leaderboard') refreshLeaderboard().catch(() => {});
   }
 
   // -------------------------------------------------------------------
   // Auth handlers
   // -------------------------------------------------------------------
-  async function handleSignup(ev) {
-    ev.preventDefault();
-    const form = ev.target;
-    const submitBtn = form.querySelector('button[type="submit"]');
-    const username = form.elements.username.value.trim();
-    const password = form.elements.password.value;
+  async function handleSignup(e) {
+    e.preventDefault();
+    clearFeedback(els.signupFeedback);
 
+    const username = (els.signupUsername.value || '').trim();
+    const password = els.signupPassword.value || '';
+    const confirm  = els.signupConfirm.value  || '';
+
+    if (!/^[a-zA-Z0-9_.\-]{3,32}$/.test(username)) {
+      showFeedback(els.signupFeedback, 'Username must be 3–32 characters: letters, numbers, dot, underscore, or hyphen.', 'error');
+      return;
+    }
     if (password.length < CONFIG.MIN_PASSWORD_LENGTH) {
-      toast(`Password must be at least ${CONFIG.MIN_PASSWORD_LENGTH} characters.`, 'error');
+      showFeedback(els.signupFeedback, `Password must be at least ${CONFIG.MIN_PASSWORD_LENGTH} characters.`, 'error');
+      return;
+    }
+    if (password !== confirm) {
+      showFeedback(els.signupFeedback, "Passwords don't match.", 'error');
+      els.signupConfirm.focus();
       return;
     }
 
-    setLoading(submitBtn, true);
+    setLoading(els.signupBtn, true);
     try {
       const data = await api('/api/auth/signup', {
-        method: 'POST', auth: false, body: { username, password },
+        method: 'POST',
+        body: JSON.stringify({ username, password }),
       });
       setSession(data.token, data.user);
-      toast(`Welcome, ${data.user.username}! You start with ${formatMoney(data.user.balance)}.`, 'success');
-      await enterDashboard();
+      enterDashboard();
     } catch (err) {
-      toast(err.message, 'error');
+      showFeedback(els.signupFeedback, err.message, 'error');
     } finally {
-      setLoading(submitBtn, false);
+      setLoading(els.signupBtn, false);
     }
   }
 
-  async function handleLogin(ev) {
-    ev.preventDefault();
-    const form = ev.target;
-    const submitBtn = form.querySelector('button[type="submit"]');
-    const username = form.elements.username.value.trim();
-    const password = form.elements.password.value;
+  async function handleLogin(e) {
+    e.preventDefault();
+    clearFeedback(els.loginFeedback);
 
-    setLoading(submitBtn, true);
+    const username = (els.loginUsername.value || '').trim();
+    const password = els.loginPassword.value || '';
+
+    if (!username || !password) {
+      showFeedback(els.loginFeedback, 'Enter your username and password.', 'error');
+      return;
+    }
+
+    setLoading(els.loginBtn, true);
     try {
       const data = await api('/api/auth/login', {
-        method: 'POST', auth: false, body: { username, password },
+        method: 'POST',
+        body: JSON.stringify({ username, password }),
       });
       setSession(data.token, data.user);
-      toast(`Welcome back, ${data.user.username}!`, 'success');
-      await enterDashboard();
+      enterDashboard();
     } catch (err) {
-      toast(err.message, 'error');
+      showFeedback(els.loginFeedback, err.message, 'error');
     } finally {
-      setLoading(submitBtn, false);
+      setLoading(els.loginBtn, false);
     }
   }
 
   function handleLogout() {
     clearSession();
-    stopPolling();
-    showView('landing');
-    toast('Logged out.', 'info', 2500);
+    showAuthView();
+    switchAuthTab('login');
+    els.formLogin.reset();
+    els.formSignup.reset();
+    hideResultBanner();
   }
 
   // -------------------------------------------------------------------
-  // Dashboard entry
+  // Dashboard entry & polling
   // -------------------------------------------------------------------
   async function enterDashboard() {
-    showView('dashboard');
-    await Promise.all([refreshMe(), refreshGames(), refreshLeaderboard()]);
+    showDashboardView();
+    switchMainTab('lobby');
+
+    // Reset completion tracking for this session
+    state.seenCompletedIds = null;
+
+    // Initial parallel fetch (don't fail the whole boot if one fails)
+    await Promise.allSettled([
+      refreshMe(),
+      refreshOpenGames(),
+      refreshMyGames(),
+      refreshLeaderboard(),
+    ]);
     startPolling();
   }
 
   async function refreshMe() {
     try {
-      const { user } = await api('/api/me');
-      state.user = user;
-      renderUser();
+      const data = await api('/api/me');
+      state.user = data.user;
+      updateTopbar();
     } catch (err) {
-      // 401 already handled inside api()
-      if (!(err instanceof ApiError) || err.status !== 401) toast(err.message, 'error');
-    }
-  }
-
-  // -------------------------------------------------------------------
-  // Games — listing, filters, polling
-  // -------------------------------------------------------------------
-  function buildGamesQuery() {
-    const q = new URLSearchParams({ status: 'open' });
-    const { wager, minWager, maxWager } = state.activeFilters;
-    if (wager    !== null) q.set('wager',    wager);
-    if (minWager !== null) q.set('minWager', minWager);
-    if (maxWager !== null) q.set('maxWager', maxWager);
-    return q.toString();
-  }
-
-  async function refreshGames() {
-    els.gamesEmpty.hidden = true;
-    els.gamesLoading.hidden = false;
-    try {
-      const { games } = await api('/api/games?' + buildGamesQuery());
-      renderGames(games);
-    } catch (err) {
-      toast(err.message, 'error');
-    } finally {
-      els.gamesLoading.hidden = true;
-    }
-  }
-
-  function renderGames(games) {
-    els.gamesList.innerHTML = '';
-    if (!games.length) { els.gamesEmpty.hidden = false; return; }
-    els.gamesEmpty.hidden = true;
-
-    for (const g of games) {
-      const node = els.tplGameRow.content.firstElementChild.cloneNode(true);
-      node.querySelector('.game-creator').textContent = g.creator_username;
-
-      const pill = node.querySelector('.game-choice-pill');
-      pill.textContent = g.creator_choice;
-      if (g.creator_choice === 'tails') pill.classList.add('tails');
-
-      node.querySelector('.game-wager').textContent = formatMoney(g.wager);
-      node.querySelector('.game-time').textContent  = formatRelative(g.created_at);
-
-      const joinBtn = node.querySelector('.game-join-btn');
-      const isMine  = state.user && g.creator_id === state.user.id;
-      const tooPoor = state.user && Number(state.user.balance) < Number(g.wager);
-
-      if (isMine) {
-        joinBtn.textContent = 'Your game';
-        joinBtn.disabled = true;
-      } else if (tooPoor) {
-        joinBtn.textContent = 'Not enough $';
-        joinBtn.disabled = true;
-      } else {
-        joinBtn.addEventListener('click', () => handleJoinGame(g.id, joinBtn));
+      if (!(err instanceof ApiError) || err.status !== 401) {
+        console.warn('[refreshMe]', err);
       }
-
-      els.gamesList.appendChild(node);
     }
-  }
-
-  function applyFilters() {
-    const w  = els.filterWager.value.trim();
-    const mn = els.filterMin.value.trim();
-    const mx = els.filterMax.value.trim();
-    state.activeFilters.wager    = w  === '' ? null : Number(w);
-    state.activeFilters.minWager = mn === '' ? null : Number(mn);
-    state.activeFilters.maxWager = mx === '' ? null : Number(mx);
-    refreshGames();
-  }
-
-  function clearFilters() {
-    els.filterWager.value = '';
-    els.filterMin.value   = '';
-    els.filterMax.value   = '';
-    state.activeFilters   = { wager: null, minWager: null, maxWager: null };
-    refreshGames();
   }
 
   function startPolling() {
     stopPolling();
-    if (!CONFIG.POLLING_INTERVAL_MS || CONFIG.POLLING_INTERVAL_MS <= 0) return;
     state.pollTimer = setInterval(() => {
-      // Don't poll mid-flip: it would replace the joined game's row.
-      if (state.isFlipping || document.hidden) return;
-      refreshGames();
+      if (document.hidden || state.isFlipping) return;
+      // Always refresh open games; my games is needed for completion detection.
+      // Leaderboard is heavier so it only refreshes on tab activation / manual click.
+      refreshOpenGames().catch(() => {});
+      refreshMyGames().catch(() => {});
+      // Light refresh of "me" so the balance pill stays current
+      refreshMe().catch(() => {});
     }, CONFIG.POLLING_INTERVAL_MS);
   }
-
   function stopPolling() {
-    if (state.pollTimer) { clearInterval(state.pollTimer); state.pollTimer = null; }
+    if (state.pollTimer) clearInterval(state.pollTimer);
+    state.pollTimer = null;
   }
 
   // -------------------------------------------------------------------
-  // Create game
+  // Open games panel
   // -------------------------------------------------------------------
-  async function handleCreateGame(ev) {
-    ev.preventDefault();
-    const form = ev.target;
-    const submitBtn = form.querySelector('button[type="submit"]');
-    const choice = form.elements.choice.value;
-    const wager  = Number(form.elements.wager.value);
-
-    if (!choice) { toast('Pick heads or tails.', 'error'); return; }
-    if (!Number.isFinite(wager) || wager < CONFIG.MIN_WAGER || wager > CONFIG.MAX_WAGER) {
-      toast(`Wager must be between $${CONFIG.MIN_WAGER} and $${CONFIG.MAX_WAGER}.`, 'error');
-      return;
-    }
-    if (state.user && wager > Number(state.user.balance)) {
-      toast('You don\'t have enough balance for that wager.', 'error');
-      return;
-    }
-
-    setLoading(submitBtn, true);
-    try {
-      await api('/api/games', { method: 'POST', body: { choice, wager } });
-      toast('Game created. Waiting for an opponent…', 'success');
-      form.reset();
-      await Promise.all([refreshGames(), refreshMe()]);
-    } catch (err) {
-      toast(err.message, 'error');
-    } finally {
-      setLoading(submitBtn, false);
-    }
-  }
-
-  // -------------------------------------------------------------------
-  // Join game (the animated flip lives here)
-  // -------------------------------------------------------------------
-  async function handleJoinGame(gameId, btn) {
-    if (state.isFlipping) return;
-    setLoading(btn, true);
-    state.isFlipping = true;
-
-    openFlipModal();
-
-    // Start the request and the visual flip in parallel. We always
-    // wait for the configured animation duration so the user sees a
-    // satisfying flip even if the API responds instantly.
-    const apiPromise = api(`/api/games/${gameId}/join`, { method: 'POST' });
-    const minDelay   = new Promise(r => setTimeout(r, CONFIG.DEFAULT_FLIP_DURATION_MS));
+  async function refreshOpenGames() {
+    const params = new URLSearchParams();
+    params.set('status', 'open');
+    if (state.filters.minWager != null) params.set('minWager', state.filters.minWager);
+    if (state.filters.maxWager != null) params.set('maxWager', state.filters.maxWager);
 
     try {
-      const [data] = await Promise.all([apiPromise, minDelay]);
-      revealFlipResult(data);
-      // Refresh underlying data so the dashboard is up to date.
-      await Promise.all([refreshMe(), refreshGames(), refreshLeaderboard()]);
+      const data = await api(`/api/games?${params.toString()}`);
+      els.gamesLoading.hidden = true;
+      renderOpenGames(data.games || []);
     } catch (err) {
-      closeFlipModal();
-      toast(err.message, 'error');
-    } finally {
-      state.isFlipping = false;
-      setLoading(btn, false);
+      if (els.gamesLoading) els.gamesLoading.textContent = 'Could not load games.';
     }
   }
 
-  // -------------------------------------------------------------------
-  // Flip modal & animation
-  // -------------------------------------------------------------------
-  function openFlipModal() {
-    els.flipResult.hidden = true;
-    els.flipTitle.textContent = 'Flipping the coin…';
-    els.flipSub.textContent   = 'Server is choosing the result…';
+  function renderOpenGames(games) {
+    els.gamesRows.innerHTML = '';
+    els.gamesRows.setAttribute('aria-busy', 'false');
+    if (games.length === 0) {
+      els.gamesEmpty.hidden = false;
+      return;
+    }
+    els.gamesEmpty.hidden = true;
 
-    // Reset coin to flipping state.
-    els.flipCoin.classList.remove('show-heads', 'show-tails');
-    els.flipCoin.style.setProperty('--tick-duration', `${CONFIG.COIN_FLIP_SPEED_MS}ms`);
-    // Force reflow so the animation restarts cleanly.
-    void els.flipCoin.offsetWidth;
-    els.flipCoin.classList.add('is-flipping');
+    const myId = state.user ? state.user.id : null;
+    const myBalance = state.user ? Number(state.user.balance) : 0;
+    const frag = document.createDocumentFragment();
 
-    els.flipModal.hidden = false;
-    els.flipModal.setAttribute('aria-hidden', 'false');
+    games.forEach(g => {
+      const node = els.tplGameRow.content.firstElementChild.cloneNode(true);
+      node.dataset.gameId = g.id;
+
+      $('.game-row-name', node).textContent = g.creator_username;
+      $('.game-row-time', node).textContent = formatRelative(g.created_at);
+
+      // Coin face for the creator's pick
+      const coin = $('.coin', node);
+      if (g.creator_choice === 'tails') {
+        // Set base inner rotation so the right face is visible
+        const inner = $('.coin-inner', coin);
+        if (inner) inner.style.transform = 'rotateY(180deg)';
+      }
+      $('.pick-label', node).textContent = capitalize(g.creator_choice);
+      $('.game-row-wager', node).textContent = formatMoney(g.wager);
+
+      const joinBtn = $('.game-row-join', node);
+      const isOwn = (g.creator_id === myId);
+      const insufficient = (g.wager > myBalance);
+      if (isOwn) {
+        joinBtn.disabled = true;
+        joinBtn.textContent = 'Your game';
+      } else if (insufficient) {
+        joinBtn.disabled = true;
+        joinBtn.textContent = 'Insufficient';
+      } else {
+        joinBtn.addEventListener('click', () => handleJoinGame(g.id, joinBtn));
+      }
+      frag.appendChild(node);
+    });
+    els.gamesRows.appendChild(frag);
   }
 
-  function closeFlipModal() {
-    els.flipModal.hidden = true;
-    els.flipModal.setAttribute('aria-hidden', 'true');
-    els.flipCoin.classList.remove('is-flipping', 'show-heads', 'show-tails');
+  function applyFilters() {
+    const min = Number(els.filterMin.value);
+    const max = Number(els.filterMax.value);
+    state.filters = {};
+    if (Number.isFinite(min) && els.filterMin.value !== '' && min >= 0) state.filters.minWager = min;
+    if (Number.isFinite(max) && els.filterMax.value !== '' && max >= 0) state.filters.maxWager = max;
+    refreshOpenGames();
+  }
+  function clearFilters() {
+    els.filterMin.value = '';
+    els.filterMax.value = '';
+    state.filters = {};
+    refreshOpenGames();
   }
 
-  function revealFlipResult(data) {
-    const { game, balance } = data;
-    const result   = game.result;                                  // 'heads' | 'tails'
-    const youWon   = state.user && game.winner_id === state.user.id;
-    const winName  = game.winner_username;
-    const wager    = Number(game.wager);
+  // -------------------------------------------------------------------
+  // My games panel
+  // -------------------------------------------------------------------
+  async function refreshMyGames() {
+    try {
+      const data = await api('/api/me/games?limit=30');
+      els.myLoading.hidden = true;
+      renderMyGames(data.games || []);
+      processCompletionDetection(data.games || []);
+    } catch (err) {
+      console.warn('[refreshMyGames]', err);
+    }
+  }
 
-    // Settle the coin to the final side.
-    els.flipCoin.classList.remove('is-flipping');
-    els.flipCoin.classList.add(result === 'heads' ? 'show-heads' : 'show-tails');
+  function renderMyGames(games) {
+    els.myRows.innerHTML = '';
+    if (games.length === 0) {
+      els.myEmpty.hidden = false;
+      return;
+    }
+    els.myEmpty.hidden = true;
 
-    els.flipTitle.textContent = youWon ? 'You won! 🎉' : 'You lost.';
-    els.flipSub.textContent   = `The coin landed on ${result.toUpperCase()}.`;
+    const myId = state.user ? state.user.id : null;
+    const frag = document.createDocumentFragment();
 
-    els.resultSide.textContent    = result.toUpperCase();
-    els.resultWinner.textContent  = winName + (youWon ? ' (you)' : '');
-    els.resultAmount.textContent  = (youWon ? '+' : '−') + formatMoney(wager);
-    els.resultBalance.textContent = formatMoney(balance);
+    games.forEach(g => {
+      const node = els.tplMyRow.content.firstElementChild.cloneNode(true);
+      const status = $('.my-row-status', node);
+      const detail = $('.my-row-detail', node);
+      const amount = $('.my-row-amount', node);
+      const time   = $('.my-row-time', node);
 
-    // Color-code amount row for a clearer signal.
-    const amountRow = els.resultAmount.closest('.result-row');
-    amountRow.classList.remove('win', 'lose');
-    amountRow.classList.add(youWon ? 'win' : 'lose');
+      const wager = Number(g.wager);
+      const isCreator = (g.creator_id === myId);
+      const opponent  = isCreator ? g.joiner_username : g.creator_username;
+      const myPick    = isCreator
+        ? g.creator_choice
+        : (g.creator_choice === 'heads' ? 'tails' : 'heads');
 
-    els.flipResult.hidden = false;
+      if (g.status === 'open') {
+        status.textContent = 'Waiting';
+        status.classList.add('s-open');
+        detail.innerHTML = '';
+        const txt = document.createElement('span');
+        txt.textContent = `You picked `;
+        const strong = document.createElement('strong');
+        strong.textContent = capitalize(g.creator_choice);
+        txt.appendChild(strong);
+        detail.appendChild(txt);
+        amount.textContent = formatMoney(wager);
+        amount.classList.add('is-pending');
+      } else if (g.status === 'completed') {
+        const won = (g.winner_id === myId);
+        status.textContent = won ? 'Won' : 'Lost';
+        status.classList.add(won ? 's-win' : 's-loss');
+
+        // Build detail text safely (no innerHTML with user data)
+        detail.innerHTML = '';
+        const part1 = document.createElement('span');
+        part1.textContent = 'vs ';
+        const oppName = document.createElement('strong');
+        oppName.textContent = opponent || 'opponent';
+        const part2 = document.createElement('span');
+        part2.textContent = ` · landed on ${capitalize(g.result)} · you picked ${capitalize(myPick)}`;
+        detail.appendChild(part1);
+        detail.appendChild(oppName);
+        detail.appendChild(part2);
+
+        amount.textContent = (won ? '+' : '−') + formatMoney(wager);
+        amount.classList.add(won ? 'is-win' : 'is-loss');
+      } else {
+        status.textContent = 'Cancelled';
+        status.classList.add('s-cancelled');
+        detail.textContent = 'No opponent joined.';
+        amount.textContent = formatMoney(wager);
+      }
+      time.textContent = formatRelative(g.completed_at || g.created_at);
+      frag.appendChild(node);
+    });
+    els.myRows.appendChild(frag);
+  }
+
+  function processCompletionDetection(games) {
+    if (!state.user) return;
+
+    const completedIds = new Set(
+      games.filter(g => g.status === 'completed').map(g => g.id)
+    );
+
+    // First load: just record what we already see; don't surface anything.
+    if (state.seenCompletedIds === null) {
+      state.seenCompletedIds = completedIds;
+      return;
+    }
+
+    // Find newly completed games (not in previous set)
+    const newOnes = games.filter(g =>
+      g.status === 'completed' && !state.seenCompletedIds.has(g.id)
+    );
+
+    newOnes.forEach(g => state.seenCompletedIds.add(g.id));
+
+    if (newOnes.length === 0) return;
+
+    // Show the most recent unseen completion in the banner.
+    // If the user just clicked "join" themselves, the flip modal already
+    // shows them the result — skip the banner for that game id.
+    const fresh = newOnes
+      .filter(g => g.id !== state.lastBannerGameId && !justSawInModal(g))
+      .sort((a, b) => new Date(b.completed_at) - new Date(a.completed_at))[0];
+    if (fresh) showResultBanner(fresh);
+
+    // If they're not currently looking at My Games, bump the badge
+    if (state.activeMainTab !== 'my') {
+      bumpMyGamesBadge(newOnes.length);
+    }
+  }
+
+  // The user just saw the modal for a game they joined — don't double-show
+  let lastModalGameId = null;
+  function justSawInModal(g) {
+    return lastModalGameId === g.id;
+  }
+
+  function bumpMyGamesBadge(count) {
+    const badge = els.myGamesBadge;
+    if (!badge) return;
+    const current = parseInt(badge.textContent, 10) || 0;
+    badge.textContent = String(current + count);
+    badge.hidden = false;
+  }
+  function hideMyGamesBadge() {
+    if (!els.myGamesBadge) return;
+    els.myGamesBadge.textContent = '';
+    els.myGamesBadge.hidden = true;
+  }
+
+  // -------------------------------------------------------------------
+  // Result banner
+  // -------------------------------------------------------------------
+  function showResultBanner(g) {
+    if (!state.user) return;
+    const myId = state.user.id;
+    const won  = (g.winner_id === myId);
+    const opponent = (g.creator_id === myId) ? g.joiner_username : g.creator_username;
+    const wager = Number(g.wager);
+
+    state.lastBannerGameId = g.id;
+
+    els.resultBanner.classList.remove('is-win', 'is-loss');
+    els.resultBanner.classList.add(won ? 'is-win' : 'is-loss');
+
+    els.resultBannerTitle.textContent = won
+      ? `You won ${formatMoney(wager)}!`
+      : `You lost ${formatMoney(wager)}.`;
+
+    // Build subtitle safely (no innerHTML with user data)
+    els.resultBannerSub.innerHTML = '';
+    const a = document.createElement('span');
+    a.textContent = `Game vs `;
+    const b = document.createElement('strong');
+    b.textContent = opponent || 'opponent';
+    const c = document.createElement('span');
+    c.textContent = ` · landed on ${capitalize(g.result)}`;
+    els.resultBannerSub.appendChild(a);
+    els.resultBannerSub.appendChild(b);
+    els.resultBannerSub.appendChild(c);
+
+    els.resultBanner.hidden = false;
+  }
+  function hideResultBanner() {
+    els.resultBanner.hidden = true;
+    els.resultBanner.classList.remove('is-win', 'is-loss');
   }
 
   // -------------------------------------------------------------------
@@ -540,85 +715,254 @@
   // -------------------------------------------------------------------
   async function refreshLeaderboard() {
     try {
-      const { users } = await api('/api/leaderboard');
-      renderLeaderboard(users);
+      const data = await api('/api/leaderboard');
+      els.lbLoading.hidden = true;
+      renderLeaderboard(data.users || []);
     } catch (err) {
-      toast(err.message, 'error');
+      if (els.lbLoading) els.lbLoading.textContent = 'Could not load leaderboard.';
     }
   }
-
   function renderLeaderboard(users) {
-    els.leaderboard.innerHTML = '';
-    if (!users.length) { els.leaderboardEmpty.hidden = false; return; }
-    els.leaderboardEmpty.hidden = true;
-
-    for (const u of users) {
+    els.lbRows.innerHTML = '';
+    if (users.length === 0) {
+      els.lbEmpty.hidden = false;
+      return;
+    }
+    els.lbEmpty.hidden = true;
+    const myId = state.user ? state.user.id : null;
+    const frag = document.createDocumentFragment();
+    users.forEach(u => {
       const node = els.tplLbRow.content.firstElementChild.cloneNode(true);
-      node.querySelector('.lb-rank').textContent    = '#' + u.rank;
-      node.querySelector('.lb-name').textContent    = u.username;
-      node.querySelector('.lb-balance').textContent = formatMoney(u.balance);
-      if (state.user && u.id === state.user.id) node.classList.add('is-me');
-      if (u.rank === 1) node.classList.add('top-1');
-      if (u.rank === 2) node.classList.add('top-2');
-      if (u.rank === 3) node.classList.add('top-3');
-      els.leaderboard.appendChild(node);
+      $('.lb-rank', node).textContent    = u.rank;
+      $('.lb-name', node).textContent    = u.username;
+      $('.lb-balance', node).textContent = formatMoney(u.balance);
+      if (u.rank === 1) node.classList.add('is-top1');
+      else if (u.rank === 2) node.classList.add('is-top2');
+      else if (u.rank === 3) node.classList.add('is-top3');
+      if (u.id === myId) node.classList.add('is-me');
+      frag.appendChild(node);
+    });
+    els.lbRows.appendChild(frag);
+  }
+
+  // -------------------------------------------------------------------
+  // Create game
+  // -------------------------------------------------------------------
+  async function handleCreateGame(e) {
+    e.preventDefault();
+    clearFeedback(els.createFeedback);
+
+    const choice = (els.formCreateGame.querySelector('input[name="choice"]:checked') || {}).value;
+    const wager  = Number(els.wagerInput.value);
+
+    if (!choice) {
+      showFeedback(els.createFeedback, 'Pick heads or tails.', 'error');
+      return;
+    }
+    if (!Number.isFinite(wager) || wager < CONFIG.MIN_WAGER || wager > CONFIG.MAX_WAGER) {
+      showFeedback(els.createFeedback, `Wager must be between $${CONFIG.MIN_WAGER} and $${CONFIG.MAX_WAGER}.`, 'error');
+      return;
+    }
+    if (state.user && wager > Number(state.user.balance)) {
+      showFeedback(els.createFeedback, `You only have ${formatMoney(state.user.balance)} available.`, 'error');
+      return;
+    }
+
+    setLoading(els.createBtn, true);
+    try {
+      await api('/api/games', {
+        method: 'POST',
+        body: JSON.stringify({ choice, wager }),
+      });
+      els.wagerInput.value = '';
+      showFeedback(els.createFeedback, 'Game created. Waiting for an opponent…', 'success');
+      // Refresh open games and the user's games immediately
+      refreshOpenGames();
+      refreshMyGames();
+      refreshMe();
+    } catch (err) {
+      showFeedback(els.createFeedback, err.message, 'error');
+    } finally {
+      setLoading(els.createBtn, false);
     }
   }
 
   // -------------------------------------------------------------------
-  // Wire up event listeners
+  // Join game (with flip animation)
   // -------------------------------------------------------------------
-  function bindEvents() {
-    // Landing → auth
-    document.addEventListener('click', (ev) => {
-      const t = ev.target.closest('[data-action]');
+  async function handleJoinGame(gameId, btn) {
+    if (state.isFlipping) return;
+    state.isFlipping = true;
+    setLoading(btn, true);
+    openFlipModal();
+
+    try {
+      const data = await api(`/api/games/${gameId}/join`, { method: 'POST' });
+      lastModalGameId = data.game.id;
+      els.flipSub.textContent = 'Here it goes…';
+      // Brief beat so the user reads the subtitle change
+      await wait(350);
+      await animateFlip(data.game.result);
+      revealFlipResult(data);
+    } catch (err) {
+      closeFlipModal();
+      showFeedback(els.createFeedback, err.message, 'error');
+      // Refresh in case the game was taken by someone else
+      refreshOpenGames();
+    } finally {
+      state.isFlipping = false;
+      setLoading(btn, false);
+    }
+  }
+
+  function wait(ms) {
+    return new Promise(r => setTimeout(r, ms));
+  }
+
+  function openFlipModal() {
+    // Reset state
+    els.flipResult.hidden = true;
+    els.flipSub.textContent = 'Server is choosing the result…';
+    const inner = els.flipCoinInner;
+    inner.style.removeProperty('--final-y');
+    inner.style.removeProperty('--toss-duration');
+    inner.style.transform = '';
+    els.flipCoin.classList.remove('is-tossing');
+    els.flipCoin.classList.add('is-waiting');
+
+    els.flipModal.hidden = false;
+    els.flipModal.setAttribute('aria-hidden', 'false');
+  }
+
+  function animateFlip(result) {
+    return new Promise(resolve => {
+      const inner = els.flipCoinInner;
+      const coin  = els.flipCoin;
+
+      // Heads = even number of half-turns (lands face up).
+      // Tails = odd number of half-turns. Multiply by 360 for a clean
+      // multi-rotation finish, then add 180 for tails.
+      const finalY = (result === 'heads') ? '2160deg' : '2340deg';
+      const dur    = CONFIG.DEFAULT_FLIP_DURATION_MS;
+
+      inner.style.setProperty('--final-y', finalY);
+      inner.style.setProperty('--toss-duration', `${dur}ms`);
+      coin.style.setProperty('--toss-duration', `${dur}ms`);
+
+      coin.classList.remove('is-waiting');
+      // Force reflow so animation restarts cleanly
+      void coin.offsetWidth;
+      coin.classList.add('is-tossing');
+
+      els.flipSub.textContent = 'Tossing…';
+
+      setTimeout(resolve, dur + 30);
+    });
+  }
+
+  function revealFlipResult(data) {
+    if (!state.user) return;
+    const game = data.game;
+    const myId = state.user.id;
+    const isCreator = (game.creator_id === myId);
+    const myPick    = isCreator ? game.creator_choice : (game.creator_choice === 'heads' ? 'tails' : 'heads');
+    const won       = (game.winner_id === myId);
+    const wager     = Number(game.wager);
+
+    els.flipSub.textContent = won ? 'You won!' : 'You lost.';
+    els.resultSide.textContent    = capitalize(game.result);
+    els.resultPick.textContent    = capitalize(myPick);
+    els.resultOutcome.textContent = won ? 'You won' : 'You lost';
+    els.resultAmount.textContent  = (won ? '+' : '−') + formatMoney(wager);
+    els.resultBalance.textContent = formatMoney(data.user.balance);
+
+    // Color the result rows
+    const allRows = els.flipResult.querySelectorAll('.result-row');
+    allRows.forEach(r => r.classList.remove('row-win', 'row-loss'));
+    const outcomeRow = els.resultOutcome.closest('.result-row');
+    const amountRow  = els.resultAmount.closest('.result-row');
+    if (outcomeRow) outcomeRow.classList.add(won ? 'row-win' : 'row-loss');
+    if (amountRow)  amountRow.classList.add(won ? 'row-win' : 'row-loss');
+
+    els.flipResult.hidden = false;
+
+    // Update local user balance from server response
+    if (data.user) {
+      state.user = data.user;
+      updateTopbar();
+    }
+    // The game is now in completed state — record it as already seen so
+    // the result banner doesn't double-fire on the next poll.
+    if (state.seenCompletedIds) state.seenCompletedIds.add(game.id);
+
+    // Refresh other panels in the background
+    refreshOpenGames().catch(() => {});
+    refreshMyGames().catch(() => {});
+    refreshLeaderboard().catch(() => {});
+  }
+
+  function closeFlipModal() {
+    els.flipModal.hidden = true;
+    els.flipModal.setAttribute('aria-hidden', 'true');
+    els.flipCoin.classList.remove('is-tossing', 'is-waiting');
+    els.flipResult.hidden = true;
+  }
+
+  // -------------------------------------------------------------------
+  // Event wiring
+  // -------------------------------------------------------------------
+  function wireEvents() {
+    // Auth tabs
+    els.authTabs.forEach(t => {
+      t.addEventListener('click', () => switchAuthTab(t.dataset.authTab));
+    });
+    // Main tabs
+    els.mainTabs.forEach(t => {
+      t.addEventListener('click', () => switchMainTab(t.dataset.mainTab));
+    });
+
+    // Auth forms
+    els.formLogin.addEventListener('submit', handleLogin);
+    els.formSignup.addEventListener('submit', handleSignup);
+    els.logoutBtn.addEventListener('click', handleLogout);
+
+    // Create
+    els.formCreateGame.addEventListener('submit', handleCreateGame);
+
+    // Open games filters / refresh
+    els.applyFilters.addEventListener('click', applyFilters);
+    els.clearFilters.addEventListener('click', clearFilters);
+    els.refreshGames.addEventListener('click', () => refreshOpenGames());
+
+    // My games refresh
+    els.refreshMy.addEventListener('click', () => refreshMyGames());
+
+    // Leaderboard refresh
+    els.refreshLb.addEventListener('click', () => refreshLeaderboard());
+
+    // Result banner
+    els.resultBannerClose.addEventListener('click', hideResultBanner);
+
+    // Flip modal close
+    els.flipCloseBtn.addEventListener('click', closeFlipModal);
+
+    // [data-action] navigation
+    document.body.addEventListener('click', (e) => {
+      const t = e.target.closest('[data-action]');
       if (!t) return;
-      ev.preventDefault();
-      switch (t.getAttribute('data-action')) {
-        case 'show-signup':  showAuthSignup();  break;
-        case 'show-login':   showAuthLogin();   break;
-        case 'show-landing': showView('landing'); break;
+      const action = t.getAttribute('data-action');
+      if (action === 'goto-app') {
+        e.preventDefault();
+        if (state.user) showDashboardView();
       }
     });
 
-    // Auth tabs
-    els.tabLogin.addEventListener('click',  () => switchAuthTab('login'));
-    els.tabSignup.addEventListener('click', () => switchAuthTab('signup'));
-
-    // Forms
-    els.formLogin.addEventListener('submit',  handleLogin);
-    els.formSignup.addEventListener('submit', handleSignup);
-    els.formCreate.addEventListener('submit', handleCreateGame);
-
-    // Refresh
-    els.refreshGames.addEventListener('click', async () => {
-      setLoading(els.refreshGames, true);
-      try { await refreshGames(); } finally { setLoading(els.refreshGames, false); }
-    });
-    els.refreshLb.addEventListener('click', async () => {
-      setLoading(els.refreshLb, true);
-      try { await refreshLeaderboard(); } finally { setLoading(els.refreshLb, false); }
-    });
-
-    // Filters
-    els.applyFilters.addEventListener('click', applyFilters);
-    els.clearFilters.addEventListener('click', clearFilters);
-    [els.filterWager, els.filterMin, els.filterMax].forEach(el => {
-      el.addEventListener('keydown', (e) => { if (e.key === 'Enter') applyFilters(); });
-    });
-
-    // Logout
-    els.logoutBtn.addEventListener('click', handleLogout);
-
-    // Flip modal close
-    els.flipClose.addEventListener('click', closeFlipModal);
-    els.flipModal.addEventListener('click', (ev) => {
-      if (ev.target === els.flipModal && !els.flipResult.hidden) closeFlipModal();
-    });
-
-    // Pause polling when the tab is hidden, resume when visible.
+    // Refresh data when tab becomes visible again
     document.addEventListener('visibilitychange', () => {
-      if (!document.hidden && state.user && !state.isFlipping) refreshGames();
+      if (document.hidden) return;
+      if (!state.user) return;
+      refreshOpenGames().catch(() => {});
+      refreshMyGames().catch(() => {});
     });
   }
 
@@ -626,24 +970,28 @@
   // Boot
   // -------------------------------------------------------------------
   async function boot() {
-    applyConfigToDOM();
-    bindEvents();
+    captureElements();
+    wireEvents();
+    document.body.dataset.config = 'ready';
 
-    if (state.token) {
-      // Try to restore the session.
-      try {
-        const { user } = await api('/api/me');
-        state.user = user;
-        renderUser();
-        await enterDashboard();
-        return;
-      } catch {
-        // Token bad/expired — fall through to landing.
-        clearSession();
-      }
+    if (!state.token) {
+      showAuthView();
+      return;
     }
-    showView('landing');
+    // Try to restore the session
+    try {
+      const data = await api('/api/me');
+      setSession(state.token, data.user);
+      enterDashboard();
+    } catch {
+      clearSession();
+      showAuthView();
+    }
   }
 
-  document.addEventListener('DOMContentLoaded', boot);
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', boot);
+  } else {
+    boot();
+  }
 })();

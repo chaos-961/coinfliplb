@@ -562,6 +562,48 @@ app.post('/api/games/:id/join', requireAuth, async (req, res) => {
   }
 });
 
+// ----- GET /api/me/games ---------------------------------------------
+// Returns the current user's games (as creator OR joiner), most recent
+// first. Used by the My Games tab and by the polling logic that detects
+// when one of the user's open games has been joined and completed.
+app.get('/api/me/games', requireAuth, async (req, res) => {
+  try {
+    const status = req.query.status ? String(req.query.status) : null;
+    const limit  = Math.min(Math.max(parseInt(req.query.limit, 10) || 20, 1), 100);
+
+    if (status && !['open', 'completed', 'cancelled'].includes(status)) {
+      return res.status(400).json({ error: 'Invalid status filter.' });
+    }
+
+    const conditions = ['(g.creator_id = $1 OR g.joiner_id = $1)'];
+    const params     = [req.user.id];
+    if (status) {
+      conditions.push(`g.status = $${params.length + 1}`);
+      params.push(status);
+    }
+
+    const sql = `
+      SELECT g.id, g.creator_id, g.creator_choice, g.wager, g.status,
+             g.created_at, g.joiner_id, g.result, g.winner_id, g.completed_at,
+             cu.username AS creator_username,
+             ju.username AS joiner_username,
+             wu.username AS winner_username
+        FROM games g
+        JOIN users cu ON cu.id = g.creator_id
+        LEFT JOIN users ju ON ju.id = g.joiner_id
+        LEFT JOIN users wu ON wu.id = g.winner_id
+       WHERE ${conditions.join(' AND ')}
+       ORDER BY COALESCE(g.completed_at, g.created_at) DESC
+       LIMIT ${limit}
+    `;
+    const result = await db.query(sql, params);
+    return res.json({ games: result.rows.map(publicGame) });
+  } catch (err) {
+    console.error('[my games]', err);
+    return res.status(500).json({ error: 'Could not load your games.' });
+  }
+});
+
 // ----- GET /api/leaderboard ------------------------------------------
 app.get('/api/leaderboard', requireAuth, async (_req, res) => {
   try {

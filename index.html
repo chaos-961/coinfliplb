@@ -1,312 +1,366 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <meta name="theme-color" content="#0b0d12" />
-  <title>CoinFlip Arena</title>
-  <link rel="stylesheet" href="styles.css" />
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='44' fill='%23f5b301' stroke='%23a87600' stroke-width='4'/%3E%3Ctext x='50' y='66' font-size='52' text-anchor='middle' font-family='system-ui' font-weight='800' fill='%23a87600'%3E%24%3C/text%3E%3C/svg%3E" />
-</head>
-<body>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0a0d18" />
+  <meta name="description" content="A friendly fake-money coinflip arena. Play with friends, climb the leaderboard. No real money." />
+  <title>CoinFlip LB</title>
 
-  <!-- Top nav -->
-  <header class="topbar" id="topbar">
-    <div class="brand">
-      <span class="brand-coin" aria-hidden="true">🪙</span>
-      <span class="brand-name" id="brand-name">CoinFlip Arena</span>
-    </div>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3CradialGradient id='g' cx='30%25' cy='30%25'%3E%3Cstop offset='0' stop-color='%23ffe084'/%3E%3Cstop offset='0.6' stop-color='%23f5b301'/%3E%3Cstop offset='1' stop-color='%23a87a00'/%3E%3C/radialGradient%3E%3C/defs%3E%3Ccircle cx='32' cy='32' r='28' fill='url(%23g)' stroke='%236e5000' stroke-width='2'/%3E%3Ctext x='32' y='42' font-family='system-ui,sans-serif' font-size='28' font-weight='800' text-anchor='middle' fill='%236e5000'%3E%24%3C/text%3E%3C/svg%3E" />
+
+  <link rel="stylesheet" href="styles.css" />
+  <script src="config.js" defer></script>
+  <script src="app.js" defer></script>
+</head>
+<body data-config="loading">
+
+  <!-- Decorative background. All purely visual — non-interactive. -->
+  <div class="bg-deco" aria-hidden="true">
+    <div class="bg-orb orb-a"></div>
+    <div class="bg-orb orb-b"></div>
+    <div class="bg-orb orb-c"></div>
+    <div class="bg-grid"></div>
+  </div>
+
+  <!-- Topbar appears only after sign-in -->
+  <header class="topbar" id="topbar" hidden>
+    <a class="brand" href="#" data-action="goto-app" aria-label="CoinFlip LB home">
+      <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true">
+        <defs>
+          <radialGradient id="brandG" cx="35%" cy="30%">
+            <stop offset="0" stop-color="#ffe28a" />
+            <stop offset="0.6" stop-color="#f5b301" />
+            <stop offset="1" stop-color="#9c7100" />
+          </radialGradient>
+        </defs>
+        <circle cx="16" cy="16" r="14" fill="url(#brandG)" stroke="#5e4400" stroke-width="1.5" />
+      </svg>
+      <span class="brand-text" id="brand-name">CoinFlip LB</span>
+    </a>
     <div class="topbar-right">
       <div class="balance-pill" id="balance-pill" hidden>
         <span class="balance-label">Balance</span>
-        <span class="balance-amount" id="balance-amount">$0.00</span>
+        <span class="balance-value" id="balance-value">$0.00</span>
       </div>
       <span class="user-name" id="user-name" hidden></span>
-      <button class="btn btn-ghost" id="logout-btn" hidden>Logout</button>
+      <button class="btn btn-ghost btn-sm" id="logout-btn" hidden>Sign out</button>
     </div>
   </header>
 
-  <!-- Toast container (errors / successes) -->
-  <div class="toast-stack" id="toast-stack" aria-live="polite"></div>
-
-  <main class="main">
-
-    <!-- ============================ LANDING ============================ -->
-    <section class="view view-landing" id="view-landing">
-      <div class="hero">
-        <div class="hero-coin">
-          <div class="coin coin-large" aria-hidden="true">
-            <div class="coin-face coin-heads">H</div>
-            <div class="coin-face coin-tails">T</div>
+  <main>
+    <!-- ============================================================ -->
+    <!-- AUTH VIEW (default landing — no separate marketing page) -->
+    <!-- ============================================================ -->
+    <section class="view view-auth" id="view-auth">
+      <div class="auth-card">
+        <div class="auth-coin-deco" aria-hidden="true">
+          <div class="coin coin-md idle-spin">
+            <div class="coin-inner">
+              <div class="coin-face coin-heads"><span>H</span></div>
+              <div class="coin-face coin-tails"><span>T</span></div>
+            </div>
           </div>
         </div>
-        <h1 class="hero-title">Heads or tails?</h1>
-        <p class="hero-sub">
-          Create an account, get <strong>$<span data-config="STARTING_BALANCE">100</span></strong>
-          in fake money, and challenge other players to a coin flip. Winner takes the wager.
-        </p>
-        <div class="hero-actions">
-          <button class="btn btn-primary btn-lg" data-action="show-signup">Create account</button>
-          <button class="btn btn-ghost btn-lg"   data-action="show-login">I already have one</button>
-        </div>
-        <ul class="hero-points">
-          <li><span class="dot"></span>Server-side fair flips — no cheating</li>
-          <li><span class="dot"></span>100% fake money, just for fun</li>
-          <li><span class="dot"></span>Climb the leaderboard</li>
-        </ul>
-      </div>
-    </section>
 
-    <!-- ============================ AUTH ============================ -->
-    <section class="view view-auth" id="view-auth" hidden>
-      <div class="card auth-card">
-        <div class="tabs">
-          <button class="tab" data-tab="login"  id="tab-login">Login</button>
-          <button class="tab" data-tab="signup" id="tab-signup">Sign up</button>
+        <h1 class="auth-title">CoinFlip LB</h1>
+        <p class="auth-subtitle">A friendly fake-money coinflip arena. Pick a side, place your wager, take the lead on the board.</p>
+
+        <div class="tabs auth-tabs" role="tablist">
+          <button class="tab is-active" data-auth-tab="login" role="tab" aria-selected="true">Sign in</button>
+          <button class="tab" data-auth-tab="signup" role="tab" aria-selected="false">Create account</button>
         </div>
 
-        <!-- Login form -->
+        <!-- Sign in -->
         <form class="auth-form" id="form-login" novalidate>
           <label class="field">
             <span class="field-label">Username</span>
-            <input class="input" type="text" name="username" autocomplete="username" required />
+            <input
+              type="text"
+              id="login-username"
+              name="username"
+              autocomplete="username"
+              placeholder="Your username"
+              autocapitalize="none"
+              spellcheck="false"
+              required
+            />
           </label>
           <label class="field">
             <span class="field-label">Password</span>
-            <input class="input" type="password" name="password" autocomplete="current-password" required />
+            <input
+              type="password"
+              id="login-password"
+              name="password"
+              autocomplete="current-password"
+              placeholder="Your password"
+              required
+            />
           </label>
-          <button class="btn btn-primary btn-block" type="submit" data-loading-text="Logging in...">
-            Log in
-          </button>
-          <p class="auth-switch">
-            New here? <a href="#" data-action="show-signup">Create an account</a>
-          </p>
+          <button type="submit" class="btn btn-primary btn-lg btn-block" id="login-btn">Sign in</button>
+          <p class="form-feedback" id="login-feedback" hidden></p>
         </form>
 
-        <!-- Signup form -->
+        <!-- Create account -->
         <form class="auth-form" id="form-signup" hidden novalidate>
           <label class="field">
             <span class="field-label">Username</span>
-            <input class="input" type="text" name="username" autocomplete="username" required
-                   minlength="3" maxlength="32" pattern="[a-zA-Z0-9_.\-]+" />
-            <span class="field-hint">3–32 chars · letters, numbers, _ . -</span>
+            <input
+              type="text"
+              id="signup-username"
+              name="username"
+              autocomplete="username"
+              placeholder="3–32 chars · letters, numbers, . _ -"
+              autocapitalize="none"
+              spellcheck="false"
+              required
+            />
           </label>
           <label class="field">
             <span class="field-label">Password</span>
-            <input class="input" type="password" name="password" autocomplete="new-password" required />
-            <span class="field-hint">At least <span data-config="MIN_PASSWORD_LENGTH">6</span> characters</span>
+            <input
+              type="password"
+              id="signup-password"
+              name="password"
+              autocomplete="new-password"
+              placeholder="At least 6 characters"
+              required
+            />
           </label>
-          <button class="btn btn-primary btn-block" type="submit" data-loading-text="Creating account...">
-            Create account
-          </button>
-          <p class="auth-switch">
-            Already registered? <a href="#" data-action="show-login">Log in instead</a>
-          </p>
+          <label class="field">
+            <span class="field-label">Confirm password</span>
+            <input
+              type="password"
+              id="signup-confirm"
+              name="confirm-password"
+              autocomplete="new-password"
+              placeholder="Type it again"
+              required
+            />
+          </label>
+          <button type="submit" class="btn btn-primary btn-lg btn-block" id="signup-btn">Create account</button>
+          <p class="form-feedback" id="signup-feedback" hidden></p>
         </form>
 
-        <p class="auth-back">
-          <a href="#" data-action="show-landing">← Back</a>
-        </p>
+        <p class="auth-fineprint">Play money only. No real currency, no gambling, no cash-out — just bragging rights.</p>
       </div>
     </section>
 
-    <!-- ============================ DASHBOARD ============================ -->
+    <!-- ============================================================ -->
+    <!-- DASHBOARD VIEW -->
+    <!-- ============================================================ -->
     <section class="view view-dashboard" id="view-dashboard" hidden>
 
-      <div class="dash-grid">
+      <!-- Result banner: shows when one of the user's open games has just been joined -->
+      <div class="result-banner" id="result-banner" hidden role="status" aria-live="polite">
+        <div class="result-banner-coin" id="result-banner-coin" aria-hidden="true"></div>
+        <div class="result-banner-text">
+          <div class="result-banner-title" id="result-banner-title">—</div>
+          <div class="result-banner-sub" id="result-banner-sub">—</div>
+        </div>
+        <button class="btn btn-ghost btn-sm" id="result-banner-close" aria-label="Dismiss">✕</button>
+      </div>
 
-        <!-- Create game card -->
-        <section class="card">
-          <header class="card-head">
-            <h2>Create a coinflip</h2>
-            <p class="muted">Pick a side and a wager. Other players can join.</p>
-          </header>
-          <form id="form-create-game" class="create-form" novalidate>
-            <fieldset class="choice-group">
-              <legend class="visually-hidden">Choose a side</legend>
-              <label class="choice">
-                <input type="radio" name="choice" value="heads" required />
-                <span class="choice-card">
-                  <span class="choice-coin">H</span>
-                  <span class="choice-label">Heads</span>
-                </span>
-              </label>
-              <label class="choice">
-                <input type="radio" name="choice" value="tails" />
-                <span class="choice-card">
-                  <span class="choice-coin tails">T</span>
-                  <span class="choice-label">Tails</span>
-                </span>
-              </label>
-            </fieldset>
+      <!-- Create a game -->
+      <div class="card create-card">
+        <div class="card-header">
+          <h2 class="card-title">Create a game</h2>
+          <p class="card-subtitle">Pick a side, set a wager, wait for someone to join.</p>
+        </div>
 
-            <label class="field">
-              <span class="field-label">Wager ($)</span>
-              <input class="input" type="number" name="wager"
-                     min="1" max="100" step="1" required />
-              <span class="field-hint" id="wager-hint">
-                Between $<span data-config="MIN_WAGER">1</span>
-                and $<span data-config="MAX_WAGER">100</span>.
-              </span>
+        <form class="create-form" id="form-create-game" novalidate>
+          <div class="choice-row" role="radiogroup" aria-label="Pick heads or tails">
+            <label class="choice-card">
+              <input type="radio" name="choice" value="heads" checked />
+              <div class="choice-content">
+                <div class="coin coin-sm">
+                  <div class="coin-inner">
+                    <div class="coin-face coin-heads"><span>H</span></div>
+                    <div class="coin-face coin-tails"><span>T</span></div>
+                  </div>
+                </div>
+                <span class="choice-label">Heads</span>
+              </div>
             </label>
+            <label class="choice-card">
+              <input type="radio" name="choice" value="tails" />
+              <div class="choice-content">
+                <div class="coin coin-sm coin-flipped-base">
+                  <div class="coin-inner">
+                    <div class="coin-face coin-heads"><span>H</span></div>
+                    <div class="coin-face coin-tails"><span>T</span></div>
+                  </div>
+                </div>
+                <span class="choice-label">Tails</span>
+              </div>
+            </label>
+          </div>
 
-            <button class="btn btn-primary btn-block" type="submit"
-                    data-loading-text="Creating...">
-              Create game
-            </button>
-          </form>
-        </section>
-
-        <!-- How to play card -->
-        <section class="card">
-          <header class="card-head">
-            <h2>How to play</h2>
-          </header>
-          <ol class="howto">
-            <li>Create an account and get $<span data-config="STARTING_BALANCE">100</span> in fake money.</li>
-            <li>Create a coinflip by choosing heads or tails and a wager.</li>
-            <li>Another player joins your game.</li>
-            <li>The server flips the coin fairly.</li>
-            <li>Winner takes the wager amount from the loser.</li>
-            <li>Climb the leaderboard.</li>
-          </ol>
-        </section>
-
-        <!-- Open games card -->
-        <section class="card card-wide">
-          <header class="card-head card-head-row">
-            <div>
-              <h2>Open games</h2>
-              <p class="muted">Find a flip you want to take.</p>
+          <label class="field">
+            <span class="field-label">Wager</span>
+            <div class="prefix-input">
+              <span class="prefix">$</span>
+              <input
+                type="number"
+                id="wager-input"
+                name="wager"
+                inputmode="numeric"
+                min="1"
+                step="1"
+                placeholder="10"
+                required
+              />
             </div>
-            <button class="btn btn-ghost" id="refresh-games-btn"
-                    data-loading-text="Refreshing...">
-              ↻ Refresh
-            </button>
-          </header>
+          </label>
 
+          <button type="submit" class="btn btn-primary btn-lg" id="create-btn">Create game</button>
+          <p class="form-feedback" id="create-feedback" hidden></p>
+        </form>
+      </div>
+
+      <!-- Tabs -->
+      <div class="tabs main-tabs" role="tablist">
+        <button class="tab is-active" data-main-tab="lobby" role="tab" aria-selected="true">Open games</button>
+        <button class="tab" data-main-tab="my" role="tab" aria-selected="false">
+          My games
+          <span class="tab-badge" id="my-games-badge" hidden></span>
+        </button>
+        <button class="tab" data-main-tab="leaderboard" role="tab" aria-selected="false">Leaderboard</button>
+      </div>
+
+      <!-- Tab panel: open games -->
+      <div class="tab-panel is-active" id="panel-lobby" role="tabpanel">
+        <div class="panel-toolbar">
           <div class="filters">
             <label class="filter">
-              <span class="field-label">Exact</span>
-              <input class="input input-sm" type="number" id="filter-wager"
-                     placeholder="any" min="0" step="1" />
+              <span class="filter-label">Min</span>
+              <div class="prefix-input prefix-input-sm">
+                <span class="prefix">$</span>
+                <input type="number" id="filter-min" min="0" step="1" placeholder="any" inputmode="numeric" />
+              </div>
             </label>
             <label class="filter">
-              <span class="field-label">Min</span>
-              <input class="input input-sm" type="number" id="filter-min"
-                     placeholder="0" min="0" step="1" />
+              <span class="filter-label">Max</span>
+              <div class="prefix-input prefix-input-sm">
+                <span class="prefix">$</span>
+                <input type="number" id="filter-max" min="0" step="1" placeholder="any" inputmode="numeric" />
+              </div>
             </label>
-            <label class="filter">
-              <span class="field-label">Max</span>
-              <input class="input input-sm" type="number" id="filter-max"
-                     placeholder="∞" min="0" step="1" />
-            </label>
-            <button class="btn btn-ghost btn-sm" id="apply-filters-btn">Apply</button>
-            <button class="btn btn-ghost btn-sm" id="clear-filters-btn">Clear</button>
+            <button type="button" class="btn btn-ghost btn-sm" id="apply-filters">Apply</button>
+            <button type="button" class="btn btn-ghost btn-sm" id="clear-filters">Clear</button>
           </div>
+          <button type="button" class="btn btn-ghost btn-sm" id="refresh-games" aria-label="Refresh">↻ Refresh</button>
+        </div>
 
-          <div class="games-list" id="games-list">
-            <!-- Game rows injected here -->
-          </div>
+        <div class="rows" id="games-rows" aria-busy="true"></div>
+        <div class="empty-state" id="games-empty" hidden>
+          No open games right now. Be the first — create one above.
+        </div>
+        <div class="loading-row" id="games-loading">Loading open games…</div>
+      </div>
 
-          <div class="empty-state" id="games-empty" hidden>
-            <p>No open games match your filters.</p>
-            <p class="muted">Create one above, or check back in a few seconds.</p>
-          </div>
+      <!-- Tab panel: my games -->
+      <div class="tab-panel" id="panel-my" role="tabpanel" hidden>
+        <div class="panel-toolbar">
+          <div class="panel-info">Your recent games — newest first.</div>
+          <button type="button" class="btn btn-ghost btn-sm" id="refresh-my" aria-label="Refresh">↻ Refresh</button>
+        </div>
+        <div class="rows" id="my-rows"></div>
+        <div class="empty-state" id="my-empty" hidden>
+          You haven't played a game yet. Create one above to get started.
+        </div>
+        <div class="loading-row" id="my-loading" hidden>Loading your games…</div>
+      </div>
 
-          <div class="loading-row" id="games-loading" hidden>
-            Loading games…
-          </div>
-        </section>
-
-        <!-- Leaderboard card -->
-        <section class="card card-wide">
-          <header class="card-head card-head-row">
-            <div>
-              <h2>Leaderboard</h2>
-              <p class="muted">Top 50 by balance.</p>
-            </div>
-            <button class="btn btn-ghost" id="refresh-leaderboard-btn"
-                    data-loading-text="Refreshing...">
-              ↻ Refresh
-            </button>
-          </header>
-          <div class="leaderboard" id="leaderboard">
-            <!-- Rows injected here -->
-          </div>
-          <div class="empty-state" id="leaderboard-empty" hidden>
-            <p>No players yet.</p>
-          </div>
-        </section>
-
+      <!-- Tab panel: leaderboard -->
+      <div class="tab-panel" id="panel-leaderboard" role="tabpanel" hidden>
+        <div class="panel-toolbar">
+          <div class="panel-info">Top 50 players by balance.</div>
+          <button type="button" class="btn btn-ghost btn-sm" id="refresh-lb" aria-label="Refresh">↻ Refresh</button>
+        </div>
+        <div class="rows leaderboard-rows" id="lb-rows"></div>
+        <div class="empty-state" id="lb-empty" hidden>No players yet.</div>
+        <div class="loading-row" id="lb-loading" hidden>Loading leaderboard…</div>
       </div>
     </section>
-
   </main>
 
-  <!-- ============================ FLIP MODAL ============================ -->
+  <!-- =============================================================== -->
+  <!-- FLIP MODAL -->
+  <!-- =============================================================== -->
   <div class="modal-backdrop" id="flip-modal" hidden aria-hidden="true">
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="flip-title">
       <h2 id="flip-title" class="flip-title">Flipping the coin…</h2>
 
-      <div class="coin-stage">
+      <div class="flip-stage">
         <div class="coin coin-xl" id="flip-coin" aria-hidden="true">
-          <div class="coin-face coin-heads">H</div>
-          <div class="coin-face coin-tails">T</div>
+          <div class="coin-inner" id="flip-coin-inner">
+            <div class="coin-face coin-heads"><span>H</span></div>
+            <div class="coin-face coin-tails"><span>T</span></div>
+          </div>
+          <div class="coin-shadow"></div>
         </div>
       </div>
 
-      <p class="flip-sub" id="flip-sub">Server is choosing the result…</p>
+      <p class="flip-sub" id="flip-sub">Spinning…</p>
 
-      <!-- Result panel (revealed after the flip) -->
       <div class="flip-result" id="flip-result" hidden>
-        <div class="result-row">
-          <span class="muted">Result</span>
-          <strong id="result-side">—</strong>
-        </div>
-        <div class="result-row">
-          <span class="muted">Winner</span>
-          <strong id="result-winner">—</strong>
-        </div>
-        <div class="result-row">
-          <span class="muted">Amount</span>
-          <strong id="result-amount">$0</strong>
-        </div>
-        <div class="result-row">
-          <span class="muted">New balance</span>
-          <strong id="result-balance">$0</strong>
-        </div>
-        <button class="btn btn-primary btn-block" id="flip-close-btn">Done</button>
+        <div class="result-row"><span class="result-key">Result</span><span class="result-val" id="result-side">—</span></div>
+        <div class="result-row"><span class="result-key">Your pick</span><span class="result-val" id="result-pick">—</span></div>
+        <div class="result-row"><span class="result-key">Outcome</span><span class="result-val" id="result-outcome">—</span></div>
+        <div class="result-row"><span class="result-key">Amount</span><span class="result-val" id="result-amount">$0</span></div>
+        <div class="result-row"><span class="result-key">New balance</span><span class="result-val" id="result-balance">$0</span></div>
+        <button class="btn btn-primary btn-block btn-lg" id="flip-close-btn">Done</button>
       </div>
     </div>
   </div>
 
-  <!-- Templates -->
-  <template id="tpl-game-row">
-    <article class="game-row">
-      <div class="game-row-main">
-        <span class="game-creator"></span>
-        <span class="game-choice-pill"></span>
-      </div>
-      <div class="game-row-meta">
-        <span class="game-wager"></span>
-        <span class="game-time muted"></span>
-      </div>
-      <button class="btn btn-primary btn-sm game-join-btn"
-              data-loading-text="Joining...">Join</button>
-    </article>
-  </template>
+  <!-- =============================================================== -->
+  <!-- TEMPLATES -->
+  <!-- =============================================================== -->
 
-  <template id="tpl-leaderboard-row">
-    <div class="lb-row">
-      <span class="lb-rank"></span>
-      <span class="lb-name"></span>
-      <span class="lb-balance"></span>
+  <!-- Open game row -->
+  <template id="tpl-game-row">
+    <div class="row game-row">
+      <div class="game-row-creator">
+        <div class="avatar"></div>
+        <div class="game-row-meta">
+          <div class="game-row-name"></div>
+          <div class="game-row-time"></div>
+        </div>
+      </div>
+      <div class="game-row-pick">
+        <div class="coin coin-xs">
+          <div class="coin-inner">
+            <div class="coin-face coin-heads"><span>H</span></div>
+            <div class="coin-face coin-tails"><span>T</span></div>
+          </div>
+        </div>
+        <span class="pick-label"></span>
+      </div>
+      <div class="game-row-wager"></div>
+      <button type="button" class="btn btn-primary btn-sm game-row-join">Join</button>
     </div>
   </template>
 
-  <!-- Scripts: config first, then app. -->
-  <script src="config.js"></script>
-  <script src="app.js"></script>
+  <!-- My-games row -->
+  <template id="tpl-my-row">
+    <div class="row my-row">
+      <div class="my-row-status"></div>
+      <div class="my-row-detail"></div>
+      <div class="my-row-amount"></div>
+      <div class="my-row-time"></div>
+    </div>
+  </template>
+
+  <!-- Leaderboard row -->
+  <template id="tpl-lb-row">
+    <div class="row lb-row">
+      <div class="lb-rank"></div>
+      <div class="lb-name"></div>
+      <div class="lb-balance"></div>
+    </div>
+  </template>
+
 </body>
 </html>
