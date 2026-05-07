@@ -71,31 +71,44 @@ app.set('trust proxy', 1);
 
 app.use(express.json({ limit: '32kb' }));
 
+// CORS section here first
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
+
 // CORS: allow only our known frontend origins. We always allow common
 // localhost origins so you can develop the frontend locally.
 const allowedOrigins = new Set([
+  'https://coinfliplb.com',
+  'https://www.coinfliplb.com',
+
   'http://localhost:3000',
   'http://localhost:5173',
   'http://localhost:8080',
   'http://127.0.0.1:3000',
   'http://127.0.0.1:5173',
   'http://127.0.0.1:8080',
-  'http://localhost:5500',          // VS Code Live Server default
+  'http://localhost:5500',
   'http://127.0.0.1:5500',
 ]);
-if (FRONTEND_ORIGIN) allowedOrigins.add(FRONTEND_ORIGIN);
 
-app.use(cors({
+if (FRONTEND_ORIGIN) {
+  allowedOrigins.add(FRONTEND_ORIGIN);
+}
+
+const corsOptions = {
   origin(origin, cb) {
-    // Allow same-origin/no-origin requests (curl, server-to-server)
     if (!origin) return cb(null, true);
-    if (allowedOrigins.has(origin)) return cb(null, true);
+
+    if (allowedOrigins.has(origin)) {
+      return cb(null, true);
+    }
+
     return cb(new Error(`Origin ${origin} is not allowed by CORS`));
   },
   credentials: false,
   methods: ['GET', 'POST', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
-}));
+};
 
 // ---------------------------------------------------------------------
 // Rate limiting (auth endpoints are the main brute-force surface)
