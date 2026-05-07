@@ -810,6 +810,11 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
     inset 0 4px 10px rgba(255,255,255,0.45),
     0 0 0 2px rgba(60, 65, 85, 0.5);
 }
+
+.coin-tails span {
+  transform: rotateY(180deg);
+}
+
 .coin-flipped-base .coin-inner { transform: rotateY(180deg); }
 
 /* Sizes */
