@@ -28,6 +28,20 @@
   const SEEN_COMPLETED_PREFIX = 'cfa_seen_completed_';
   const PENDING_CREATED_PREFIX = 'cfa_pending_created_';
 
+  // Client-side abuse protection. Server remains the source of truth; these
+  // guards prevent accidental double actions and reduce needless traffic.
+  const CLIENT_ACTION_COOLDOWNS = {
+    create: 2600,
+    join: 1900,
+    cancel: 1700,
+    refresh: 900,
+  };
+  const CLIENT_GET_CACHE_TTL = 900;
+  const actionCooldowns = new Map();
+  const pendingActions = new Set();
+  const pendingGetRequests = new Map();
+  const clientGetCache = new Map();
+
   // Keep auth tokens in sessionStorage so closing the browser clears the session.
   // A legacy localStorage token is accepted once, then migrated away on sign-in.
   const tokenStorage = window.sessionStorage;
@@ -223,6 +237,49 @@
   function playClick() {}
 
   // -------------------------------------------------------------------
+  // Lightweight client throttling / cache helpers
+  // -------------------------------------------------------------------
+  function remainingCooldownMs(key) {
+    return Math.max(0, (actionCooldowns.get(key) || 0) - Date.now());
+  }
+
+  function startClientCooldown(key, ms, message) {
+    if (!key || !ms) return true;
+    const remaining = remainingCooldownMs(key);
+    if (remaining > 0) {
+      if (message) notify(`${message} (${Math.ceil(remaining / 1000)}s)`, 'info', { timeout: 2200 });
+      return false;
+    }
+    actionCooldowns.set(key, Date.now() + ms);
+    return true;
+  }
+
+  function beginClientAction(key, ms, message) {
+    if (pendingActions.has(key)) {
+      if (message) notify(message, 'info', { timeout: 2200 });
+      return null;
+    }
+    if (!startClientCooldown(key, ms, message)) return null;
+    pendingActions.add(key);
+    return () => pendingActions.delete(key);
+  }
+
+  function clearClientReadCache() {
+    clientGetCache.clear();
+    pendingGetRequests.clear();
+  }
+
+  function cloneJson(value) {
+    if (value == null) return value;
+    try { return structuredClone(value); } catch { return JSON.parse(JSON.stringify(value)); }
+  }
+
+  function runThrottled(key, ms, fn) {
+    if (!startClientCooldown(`refresh:${key}`, ms || CLIENT_ACTION_COOLDOWNS.refresh, 'Refreshing too fast')) return;
+    return fn();
+  }
+
+  // -------------------------------------------------------------------
   // API helper
   // -------------------------------------------------------------------
   class ApiError extends Error {
@@ -235,6 +292,19 @@
   }
 
   async function api(path, opts = {}) {
+    const method = opts.method || 'GET';
+    const isCacheableGet = method === 'GET' && (
+      path.startsWith('/api/games?') ||
+      path.startsWith('/api/leaderboard')
+    );
+    const cacheKey = isCacheableGet ? path : null;
+
+    if (cacheKey) {
+      const cached = clientGetCache.get(cacheKey);
+      if (cached && cached.expiresAt > Date.now()) return cloneJson(cached.value);
+      if (pendingGetRequests.has(cacheKey)) return cloneJson(await pendingGetRequests.get(cacheKey));
+    }
+
     const headers = Object.assign(
       { 'Accept': 'application/json' },
       opts.headers || {}
@@ -246,34 +316,49 @@
       headers['Authorization'] = `Bearer ${state.token}`;
     }
 
-    let res;
-    try {
-      res = await fetch(API + path, {
-        method:  opts.method || 'GET',
-        headers,
-        body:    opts.body,
-        cache:   'no-store',
-      });
-    } catch (err) {
-      throw new ApiError("Couldn't reach the server. Check your connection and try again.", 0, null);
-    }
-
-    let data = null;
-    const ct = res.headers.get('content-type') || '';
-    if (ct.includes('application/json')) {
-      try { data = await res.json(); } catch { data = null; }
-    }
-
-    if (!res.ok) {
-      const msg = (data && data.error) ? data.error : `Request failed (${res.status})`;
-      if (res.status === 401 && state.token) {
-        clearSession();
-        showAuthView();
-        showFeedback(els.loginFeedback, 'Your session expired. Please sign in again.', 'info');
+    const performRequest = (async () => {
+      let res;
+      try {
+        res = await fetch(API + path, {
+          method,
+          headers,
+          body:    opts.body,
+          cache:   'no-store',
+        });
+      } catch (err) {
+        throw new ApiError("Couldn't reach the server. Check your connection and try again.", 0, null);
       }
-      throw new ApiError(msg, res.status, data);
+
+      let data = null;
+      const ct = res.headers.get('content-type') || '';
+      if (ct.includes('application/json')) {
+        try { data = await res.json(); } catch { data = null; }
+      }
+
+      if (!res.ok) {
+        const msg = (data && data.error) ? data.error : `Request failed (${res.status})`;
+        if (res.status === 401 && state.token) {
+          clearSession();
+          showAuthView();
+          showFeedback(els.loginFeedback, 'Your session expired. Please sign in again.', 'info');
+        }
+        if (res.status === 429) {
+          notify(msg || 'Slow down a bit.', 'error', { timeout: 4200 });
+        }
+        throw new ApiError(msg, res.status, data);
+      }
+      if (cacheKey) {
+        clientGetCache.set(cacheKey, { value: cloneJson(data), expiresAt: Date.now() + CLIENT_GET_CACHE_TTL });
+      }
+      return data;
+    })();
+
+    if (cacheKey) pendingGetRequests.set(cacheKey, performRequest);
+    try {
+      return cloneJson(await performRequest);
+    } finally {
+      if (cacheKey) pendingGetRequests.delete(cacheKey);
     }
-    return data;
   }
 
   // -------------------------------------------------------------------
@@ -1372,7 +1457,6 @@
       showFeedback(els.createFeedback, 'You Lost! You cannot create another game.', 'error');
       return;
     }
-
     sanitizeIntegerInput(els.wagerInput, { clampMax: true });
     const choice = (els.formCreateGame.querySelector('input[name="choice"]:checked') || {}).value;
     const wager  = parseWholeDollars(els.wagerInput.value);
@@ -1400,12 +1484,16 @@
       if (!ok) return;
     }
 
+    const finishAction = beginClientAction('create-game', CLIENT_ACTION_COOLDOWNS.create, 'Creating too fast');
+    if (!finishAction) return;
+
     setLoading(els.createBtn, true);
     try {
       const data = await api('/api/games', {
         method: 'POST',
         body: JSON.stringify({ choice, wager }),
       });
+      clearClientReadCache();
       if (data.game) trackCreatedGameForNotification(data.game.id);
       if (data.user) {
         state.user = data.user;
@@ -1423,6 +1511,7 @@
     } catch (err) {
       showFeedback(els.createFeedback, err.message, 'error');
     } finally {
+      finishAction();
       setLoading(els.createBtn, false);
       updateWagerLimitUI();
     }
@@ -1437,6 +1526,8 @@
       return;
     }
     if (!gameId) return;
+    const finishAction = beginClientAction(`cancel-game:${gameId}`, CLIENT_ACTION_COOLDOWNS.cancel, 'Cancelling too fast');
+    if (!finishAction) return;
     const ok = await confirmModal({
       title: 'Cancel game?',
       body: 'Cancel this open game and refund the wager? You can always create a new one.',
@@ -1444,10 +1535,11 @@
       cancelText: 'Keep game',
       danger: true,
     });
-    if (!ok) return;
+    if (!ok) { finishAction(); return; }
     setLoading(btn, true);
     try {
       const data = await api(`/api/games/${gameId}/cancel`, { method: 'POST' });
+      clearClientReadCache();
       if (data.user) {
         state.user = data.user;
         await refreshOwnOpenGamesCount();
@@ -1462,6 +1554,7 @@
       setTimeout(() => clearFeedback(els.createFeedback), 20000);
       refreshMyGames().catch(() => {});
     } finally {
+      finishAction();
       setLoading(btn, false);
     }
   }
@@ -1475,6 +1568,8 @@
       return;
     }
     if (state.isFlipping) return;
+    const finishAction = beginClientAction(`join-game:${gameId}`, CLIENT_ACTION_COOLDOWNS.join, 'Joining too fast');
+    if (!finishAction) return;
 
     if (state.user && Number(wager) >= 100 && Number(wager) >= Math.floor(Number(state.user.balance) * 0.5)) {
       const ok = await confirmModal({
@@ -1484,7 +1579,7 @@
         cancelText: 'Back',
         danger: false,
       });
-      if (!ok) return;
+      if (!ok) { finishAction(); return; }
     }
 
     state.isFlipping = true;
@@ -1493,6 +1588,7 @@
 
     try {
       const data = await api(`/api/games/${gameId}/join`, { method: 'POST' });
+      clearClientReadCache();
       lastModalGameId = data.game.id;
       els.flipSub.textContent = 'Here it goes…';
       await wait(350);
@@ -1503,6 +1599,7 @@
       showFeedback(els.createFeedback, err.message, 'error');
       refreshOpenGames();
     } finally {
+      finishAction();
       state.isFlipping = false;
       setLoading(btn, false);
     }
@@ -1688,19 +1785,19 @@
     // Open games
     on(els.applyFilters, 'click', applyFilters);
     on(els.clearFilters, 'click', clearFilters);
-    on(els.refreshGames, 'click', () => refreshOpenGames());
-    on(els.gamesPrev, 'click', () => { if (state.pages.lobby > 1) { state.pages.lobby -= 1; refreshOpenGames(); } });
-    on(els.gamesNext, 'click', () => { state.pages.lobby += 1; refreshOpenGames(); });
+    on(els.refreshGames, 'click', () => runThrottled('games', CLIENT_ACTION_COOLDOWNS.refresh, () => refreshOpenGames()));
+    on(els.gamesPrev, 'click', () => runThrottled('games-prev', CLIENT_ACTION_COOLDOWNS.refresh, () => { if (state.pages.lobby > 1) { state.pages.lobby -= 1; refreshOpenGames(); } }));
+    on(els.gamesNext, 'click', () => runThrottled('games-next', CLIENT_ACTION_COOLDOWNS.refresh, () => { state.pages.lobby += 1; refreshOpenGames(); }));
 
     // My games
-    on(els.refreshMy, 'click', () => refreshMyGames());
-    on(els.myPrev, 'click', () => { if (state.pages.my > 1) { state.pages.my -= 1; refreshMyGames(); } });
-    on(els.myNext, 'click', () => { state.pages.my += 1; refreshMyGames(); });
+    on(els.refreshMy, 'click', () => runThrottled('my', CLIENT_ACTION_COOLDOWNS.refresh, () => refreshMyGames()));
+    on(els.myPrev, 'click', () => runThrottled('my-prev', CLIENT_ACTION_COOLDOWNS.refresh, () => { if (state.pages.my > 1) { state.pages.my -= 1; refreshMyGames(); } }));
+    on(els.myNext, 'click', () => runThrottled('my-next', CLIENT_ACTION_COOLDOWNS.refresh, () => { state.pages.my += 1; refreshMyGames(); }));
 
     // Leaderboard
-    on(els.refreshLb, 'click', () => refreshLeaderboard());
-    on(els.lbPrev, 'click', () => { if (state.pages.leaderboard > 1) { state.pages.leaderboard -= 1; refreshLeaderboard(); } });
-    on(els.lbNext, 'click', () => { state.pages.leaderboard += 1; refreshLeaderboard(); });
+    on(els.refreshLb, 'click', () => runThrottled('leaderboard', CLIENT_ACTION_COOLDOWNS.refresh, () => refreshLeaderboard()));
+    on(els.lbPrev, 'click', () => runThrottled('lb-prev', CLIENT_ACTION_COOLDOWNS.refresh, () => { if (state.pages.leaderboard > 1) { state.pages.leaderboard -= 1; refreshLeaderboard(); } }));
+    on(els.lbNext, 'click', () => runThrottled('lb-next', CLIENT_ACTION_COOLDOWNS.refresh, () => { state.pages.leaderboard += 1; refreshLeaderboard(); }));
 
     // Result banner
     on(els.resultBannerClose, 'click', hideResultBanner);

@@ -70,6 +70,16 @@ const TRUST_PROXY      = process.env.TRUST_PROXY ? Number(process.env.TRUST_PROX
 // Auto-cancel open games older than this many hours (default 48h, 0 = disabled).
 const OPEN_GAME_TTL_HOURS = parseInt(process.env.OPEN_GAME_TTL_HOURS || '48', 10);
 
+// Lightweight abuse-control tuning. All are in-memory on purpose: no DB/schema changes.
+const MAX_CONTENT_LENGTH_BYTES = 32 * 1024;
+const MAX_IN_FLIGHT_PER_IP     = parseInt(process.env.MAX_IN_FLIGHT_PER_IP || '25', 10);
+const CREATE_COOLDOWN_MS       = parseInt(process.env.CREATE_COOLDOWN_MS || '2500', 10);
+const JOIN_COOLDOWN_MS         = parseInt(process.env.JOIN_COOLDOWN_MS || '1800', 10);
+const CANCEL_COOLDOWN_MS       = parseInt(process.env.CANCEL_COOLDOWN_MS || '1600', 10);
+const GAMES_CACHE_TTL_MS       = parseInt(process.env.GAMES_CACHE_TTL_MS || '1500', 10);
+const LEADERBOARD_CACHE_TTL_MS = parseInt(process.env.LEADERBOARD_CACHE_TTL_MS || '5000', 10);
+const MAX_CACHE_ENTRIES        = 100;
+
 const MIN_PASSWORD_LENGTH = 6;
 const MAX_PASSWORD_LENGTH = 200;             // bcrypt DoS guard
 const MAX_USERNAME_LENGTH = 32;
@@ -113,6 +123,71 @@ app.disable('x-powered-by');
 // Trust proxy hops for correct client IPs behind Railway's load balancer.
 app.set('trust proxy', TRUST_PROXY);
 
+// ---------------------------------------------------------------------
+// In-memory protection primitives (single-process, DB-free).
+// ---------------------------------------------------------------------
+const inFlightByIp = new Map();
+const cooldowns = new Map();
+const joinLocks = new Set();
+const responseCache = new Map();
+
+function clientIp(req) {
+  return req.ip || req.headers['x-forwarded-for'] || req.socket?.remoteAddress || 'unknown';
+}
+
+function cacheKey(req, scope) {
+  return `${scope}:${req.originalUrl}`;
+}
+
+function getCachedJson(key) {
+  const hit = responseCache.get(key);
+  if (!hit) return null;
+  if (hit.expiresAt <= Date.now()) {
+    responseCache.delete(key);
+    return null;
+  }
+  return hit.value;
+}
+
+function setCachedJson(key, value, ttlMs) {
+  if (!ttlMs || ttlMs <= 0) return;
+  if (responseCache.size >= MAX_CACHE_ENTRIES) {
+    const first = responseCache.keys().next().value;
+    if (first) responseCache.delete(first);
+  }
+  responseCache.set(key, { value, expiresAt: Date.now() + ttlMs });
+}
+
+function clearResponseCache() {
+  responseCache.clear();
+}
+
+function requireCooldown(label, ms) {
+  return (req, res, next) => {
+    if (!ms || ms <= 0) return next();
+    const key = `${label}:${req.user?.id || clientIp(req)}`;
+    const now = Date.now();
+    const until = cooldowns.get(key) || 0;
+    if (until > now) {
+      const retryAfter = Math.max(1, Math.ceil((until - now) / 1000));
+      res.set('Retry-After', String(retryAfter));
+      return res.status(429).json({ error: `Slow down. Try again in ${retryAfter}s.` });
+    }
+    cooldowns.set(key, now + ms);
+    next();
+  };
+}
+
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, until] of cooldowns) {
+    if (until <= now) cooldowns.delete(key);
+  }
+  for (const [key, hit] of responseCache) {
+    if (hit.expiresAt <= now) responseCache.delete(key);
+  }
+}, 60_000).unref?.();
+
 // Security headers via helmet. CSP is left off because the frontend
 // is served from a separate origin (CDN/static host) and the API is
 // JSON-only — there's no HTML for a CSP to apply to.
@@ -123,6 +198,31 @@ app.use(helmet({
   // resource policy would block it. CORS is the access gate.
   crossOriginResourcePolicy: { policy: 'cross-origin' },
 }));
+
+// Reject oversized requests before body parsing work starts.
+app.use((req, res, next) => {
+  const len = Number(req.headers['content-length'] || 0);
+  if (Number.isFinite(len) && len > MAX_CONTENT_LENGTH_BYTES) {
+    return res.status(413).json({ error: 'Request is too large.' });
+  }
+  next();
+});
+
+// Cap concurrent API requests per IP to reduce cheap flood pressure.
+app.use('/api/', (req, res, next) => {
+  const ip = clientIp(req);
+  const active = inFlightByIp.get(ip) || 0;
+  if (active >= MAX_IN_FLIGHT_PER_IP) {
+    return res.status(429).json({ error: 'Too many concurrent requests. Slow down.' });
+  }
+  inFlightByIp.set(ip, active + 1);
+  res.on('finish', () => {
+    const current = inFlightByIp.get(ip) || 1;
+    if (current <= 1) inFlightByIp.delete(ip);
+    else inFlightByIp.set(ip, current - 1);
+  });
+  next();
+});
 
 app.use(express.json({ limit: '32kb', strict: true }));
 
@@ -468,7 +568,7 @@ app.get('/api/me', requireAuth, async (req, res) => {
 // ----- POST /api/games (create) --------------------------------------
 // Creates an open game and reserves the creator's wager immediately.
 // This prevents a user with $60 from creating multiple $50 games.
-app.post('/api/games', requireAuth, createGameLimiter, async (req, res) => {
+app.post('/api/games', requireAuth, createGameLimiter, requireCooldown('create-game', CREATE_COOLDOWN_MS), async (req, res) => {
   const choice = req.body?.choice;
   const wager  = parseWagerInteger(req.body?.wager);
 
@@ -530,6 +630,7 @@ app.post('/api/games', requireAuth, createGameLimiter, async (req, res) => {
     );
 
     await client.query('COMMIT');
+    clearResponseCache();
 
     const row = insert.rows[0];
     return res.status(201).json({
@@ -585,6 +686,13 @@ app.get('/api/games', requireAuth, async (req, res) => {
     }
 
     const where = conditions.join(' AND ');
+    const key = cacheKey(req, 'games');
+    const cached = getCachedJson(key);
+    if (cached) {
+      res.set('X-Cache', 'HIT');
+      return res.json(cached);
+    }
+
     const countRes = await db.query(`SELECT COUNT(*)::int AS total FROM games g WHERE ${where}`, params);
     const total = Number(countRes.rows[0]?.total || 0);
 
@@ -599,13 +707,16 @@ app.get('/api/games', requireAuth, async (req, res) => {
       LIMIT $${p++} OFFSET $${p++}
     `;
     const result = await db.query(sql, [...params, limit, offset]);
-    return res.json({
+    const payload = {
       games: result.rows.map(publicGame),
       page,
       limit,
       total,
       totalPages: Math.max(1, Math.ceil(total / limit)),
-    });
+    };
+    setCachedJson(key, payload, GAMES_CACHE_TTL_MS);
+    res.set('X-Cache', 'MISS');
+    return res.json(payload);
 
   } catch (err) {
     console.error('[list games]', err);
@@ -646,7 +757,7 @@ app.get('/api/games/:id', requireAuth, async (req, res) => {
 
 // ----- POST /api/games/:id/cancel ------------------------------------
 // Cancels an open game created by the current user and refunds escrow.
-app.post('/api/games/:id/cancel', requireAuth, gameActionLimiter, async (req, res) => {
+app.post('/api/games/:id/cancel', requireAuth, gameActionLimiter, requireCooldown('cancel-game', CANCEL_COOLDOWN_MS), async (req, res) => {
   const gameId = parseInt(req.params.id, 10);
   if (!Number.isInteger(gameId) || gameId <= 0) {
     return res.status(400).json({ error: 'Invalid game id.' });
@@ -688,6 +799,7 @@ app.post('/api/games/:id/cancel', requireAuth, gameActionLimiter, async (req, re
     );
 
     await client.query('COMMIT');
+    clearResponseCache();
     return res.json({ ok: true, user: publicUser(userRes.rows[0]) });
 
   } catch (err) {
@@ -702,11 +814,17 @@ app.post('/api/games/:id/cancel', requireAuth, gameActionLimiter, async (req, re
 // ----- POST /api/games/:id/join --------------------------------------
 // The creator's wager is already in escrow. Joining deducts the joiner's
 // wager, flips server-side, then pays the full pot (2x wager) to winner.
-app.post('/api/games/:id/join', requireAuth, gameActionLimiter, async (req, res) => {
+app.post('/api/games/:id/join', requireAuth, gameActionLimiter, requireCooldown('join-game', JOIN_COOLDOWN_MS), async (req, res) => {
   const gameId = parseInt(req.params.id, 10);
   if (!Number.isInteger(gameId) || gameId <= 0) {
     return res.status(400).json({ error: 'Invalid game id.' });
   }
+
+  const lockKey = `game:${gameId}`;
+  if (joinLocks.has(lockKey)) {
+    return res.status(409).json({ error: 'This game is already being joined. Refresh and try another game.' });
+  }
+  joinLocks.add(lockKey);
 
   const client = await db.getClient();
   try {
@@ -787,6 +905,7 @@ app.post('/api/games/:id/join', requireAuth, gameActionLimiter, async (req, res)
     );
 
     await client.query('COMMIT');
+    clearResponseCache();
 
     const finalRes = await db.query(
       `SELECT g.*,
@@ -817,6 +936,7 @@ app.post('/api/games/:id/join', requireAuth, gameActionLimiter, async (req, res)
     console.error('[join game]', err);
     return res.status(500).json({ error: 'Could not join the game. Please try again.' });
   } finally {
+    joinLocks.delete(lockKey);
     client.release();
   }
 });
@@ -875,6 +995,13 @@ app.get('/api/me/games', requireAuth, async (req, res) => {
 // Public — no auth required. Top 100 users by balance.
 app.get('/api/leaderboard', async (req, res) => {
   try {
+    const key = cacheKey(req, 'leaderboard');
+    const cached = getCachedJson(key);
+    if (cached) {
+      res.set('X-Cache', 'HIT');
+      return res.json(cached);
+    }
+
     const page = parsePage(req.query.page, 1);
     const limit = parseLimit(req.query.limit, 20, 20);
     const cappedTotalRes = await db.query('SELECT LEAST(COUNT(*)::int, 100) AS total FROM users');
@@ -890,7 +1017,7 @@ app.get('/api/leaderboard', async (req, res) => {
         LIMIT $1 OFFSET $2`,
       [limit, offset]
     );
-    return res.json({
+    const payload = {
       users: result.rows.map((r, i) => ({
         rank: offset + i + 1,
         ...publicUser(r),
@@ -899,7 +1026,10 @@ app.get('/api/leaderboard', async (req, res) => {
       limit,
       total,
       totalPages,
-    });
+    };
+    setCachedJson(key, payload, LEADERBOARD_CACHE_TTL_MS);
+    res.set('X-Cache', 'MISS');
+    return res.json(payload);
   } catch (err) {
     console.error('[leaderboard]', err);
     return res.status(500).json({ error: 'Could not load leaderboard.' });
@@ -938,6 +1068,7 @@ async function reapStaleOpenGames() {
     }
     await client.query('COMMIT');
     if (stale.rowCount > 0) {
+      clearResponseCache();
       console.log(`[reap] auto-cancelled ${stale.rowCount} stale open game(s).`);
     }
   } catch (err) {

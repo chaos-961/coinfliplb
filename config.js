@@ -21,6 +21,7 @@ window.CONFIG = Object.freeze({
   // The real "watcher" interval is shorter and lives in app.js.
   POLLING_INTERVAL_MS: 60000,
 
+  // After eah update, add by 0.0.1
   // App version surfaced in the footer.
-  APP_VERSION: "v1.0",
+  APP_VERSION: "v0.9.3",
 });
