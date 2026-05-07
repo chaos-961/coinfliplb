@@ -2219,3 +2219,53 @@ body.is-eliminated .topbar .balance-pill {
     transition: transform 520ms ease-out;
   }
 }
+
+/* =====================================================================
+   FIX: static heads/tails selector coins
+   ---------------------------------------------------------------------
+   The create-game side buttons were using the 3D flip coin markup for tiny
+   static icons. Old .static-tail / .coin-flipped-base rules fought with
+   later 3D depth rules, so both buttons could show the heads texture.
+   For the side picker, render exactly one flat face per option.
+   ===================================================================== */
+.choice-row .choice-card .coin-sm {
+  perspective: none;
+  transform: none;
+  contain: paint;
+}
+.choice-row .choice-card .coin-sm::after,
+.choice-row .choice-card .coin-sm .coin-inner::before {
+  display: none;
+}
+.choice-row .choice-card .coin-sm .coin-inner {
+  transform: none !important;
+  transform-style: flat;
+  transition: none;
+}
+.choice-row .choice-card .coin-sm .coin-face {
+  inset: 0;
+  transform: none !important;
+  backface-visibility: visible;
+  -webkit-backface-visibility: visible;
+}
+.choice-row .choice-card input[value="heads"] ~ .choice-content .coin-tails,
+.choice-row .choice-card input[value="tails"] ~ .choice-content .coin-heads {
+  display: none !important;
+}
+.choice-row .choice-card input[value="heads"] ~ .choice-content .coin-heads,
+.choice-row .choice-card input[value="tails"] ~ .choice-content .coin-tails {
+  display: flex !important;
+}
+.choice-row .choice-card input[value="heads"] ~ .choice-content .coin-heads {
+  color: #5a3500;
+  background:
+    radial-gradient(circle at 30% 22%, rgba(255,255,255,.93) 0 9%, transparent 10%),
+    radial-gradient(circle at 48% 46%, #ffe8a3 0 33%, #f6b81e 56%, #9a6206 100%);
+}
+.choice-row .choice-card input[value="tails"] ~ .choice-content .coin-tails {
+  color: #1f2937;
+  background:
+    radial-gradient(circle at 30% 22%, rgba(255,255,255,.98) 0 9%, transparent 10%),
+    radial-gradient(circle at 48% 46%, #ffffff 0 30%, #e2e8f0 51%, #94a3b8 73%, #475569 100%);
+  border-color: rgba(248,250,252,.52);
+}
