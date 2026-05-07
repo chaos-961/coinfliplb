@@ -2269,3 +2269,61 @@ body.is-eliminated .topbar .balance-pill {
     radial-gradient(circle at 48% 46%, #ffffff 0 30%, #e2e8f0 51%, #94a3b8 73%, #475569 100%);
   border-color: rgba(248,250,252,.52);
 }
+
+
+/* ------------------------------------------------------------------
+   FIX: Static choice coins
+   The heads/tails picker must not use the animated 3D coin stack. The
+   old markup put both faces in the same small preview, while later CSS
+   re-applied 3D transforms and rim/shine pseudo-elements. That caused
+   the silver rim/face layers to overlap and made Heads/Tails look the
+   same. These previews are now one real face only.
+   ------------------------------------------------------------------ */
+.choice-row .choice-coin {
+  perspective: none !important;
+  transform: none !important;
+  contain: paint;
+  overflow: hidden;
+  border-radius: 50%;
+}
+.choice-row .choice-coin::after,
+.choice-row .choice-coin .coin-inner::before {
+  display: none !important;
+  content: none !important;
+}
+.choice-row .choice-coin .coin-inner {
+  transform: none !important;
+  transform-style: flat !important;
+  width: 100%;
+  height: 100%;
+}
+.choice-row .choice-coin .coin-face {
+  display: flex !important;
+  transform: none !important;
+  inset: 0;
+  border-radius: 50%;
+  overflow: hidden;
+  clip-path: circle(50% at 50% 50%);
+  backface-visibility: visible !important;
+  -webkit-backface-visibility: visible !important;
+}
+.choice-row .choice-coin-heads .coin-heads {
+  background:
+    radial-gradient(circle at 34% 26%, #fff7cc 0 12%, transparent 13%),
+    radial-gradient(circle at 34% 30%, #ffe287 0%, #f5b301 46%, #a86d06 100%) !important;
+  color: #5a3a00 !important;
+  box-shadow:
+    inset 0 -4px 10px rgba(0,0,0,0.28),
+    inset 0 4px 10px rgba(255,255,255,0.35),
+    0 0 0 2px rgba(120, 80, 5, 0.5) !important;
+}
+.choice-row .choice-coin-tails .coin-tails {
+  background:
+    radial-gradient(circle at 34% 26%, #ffffff 0 12%, transparent 13%),
+    radial-gradient(circle at 34% 30%, #f9fafb 0%, #cdd3df 48%, #667085 100%) !important;
+  color: #2d3346 !important;
+  box-shadow:
+    inset 0 -4px 10px rgba(0,0,0,0.30),
+    inset 0 4px 10px rgba(255,255,255,0.45),
+    0 0 0 2px rgba(60, 65, 85, 0.5) !important;
+}
