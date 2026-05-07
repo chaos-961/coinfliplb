@@ -825,12 +825,15 @@
       $('.game-row-name', node).textContent = g.creator_username;
       $('.game-row-time', node).textContent = formatRelative(g.created_at);
 
-      // Coin face for the creator's pick
-      const coin = $('.coin', node);
-      if (g.creator_choice === 'tails') {
-        // Set base inner rotation so the right face is visible
-        const inner = $('.coin-inner', coin);
-        if (inner) inner.style.transform = 'rotateY(180deg)';
+      // Static coin face for the creator's pick. Do NOT use the animated 3D coin
+      // here; it has depth/rim pseudo-elements that overlap at small sizes.
+      const pickCoin = $('.game-pick-coin', node);
+      if (pickCoin) {
+        const side = (g.creator_choice === 'tails') ? 'tails' : 'heads';
+        pickCoin.classList.toggle('static-coin-heads', side === 'heads');
+        pickCoin.classList.toggle('static-coin-tails', side === 'tails');
+        const coinText = pickCoin.querySelector('span');
+        if (coinText) coinText.textContent = side === 'heads' ? 'H' : 'T';
       }
       $('.pick-label', node).textContent = capitalize(g.creator_choice);
       $('.game-row-wager', node).textContent = formatMoney(g.wager);
@@ -1072,6 +1075,15 @@
 
     els.resultBanner.classList.remove('is-win', 'is-loss');
     els.resultBanner.classList.add(won ? 'is-win' : 'is-loss');
+
+    // Show the actual landed side with the same isolated static coin used in the picker.
+    if (els.resultBannerCoin) {
+      const side = (g.result === 'tails') ? 'tails' : 'heads';
+      els.resultBannerCoin.classList.toggle('static-coin-heads', side === 'heads');
+      els.resultBannerCoin.classList.toggle('static-coin-tails', side === 'tails');
+      const coinText = els.resultBannerCoin.querySelector('span');
+      if (coinText) coinText.textContent = side === 'heads' ? 'H' : 'T';
+    }
 
     els.resultBannerTitle.textContent = won
       ? `You won ${formatMoney(wager * 2)}!`
