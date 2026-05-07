@@ -2714,3 +2714,105 @@ body.is-eliminated .topbar .balance-pill {
     radial-gradient(circle at 30% 22%, rgba(255,255,255,1) 0 8%, transparent 9%),
     radial-gradient(circle at 50% 48%, #ffffff 0 29%, #e5eaf1 53%, #a8b3c1 76%, #596777 100%) !important;
 }
+
+/* =====================================================================
+   v0.13 PHYSICAL VERTICAL FLIP
+   ---------------------------------------------------------------------
+   Fixes the modal toss only:
+   - vertical flip on the X axis, no diagonal corkscrew
+   - 1.5s motion
+   - front/back faces are connected by a visible middle rim so there is no
+     see-through gap when the coin is edge-on
+   ===================================================================== */
+.flip-coin {
+  --flip-size: clamp(160px, 52vw, 210px) !important;
+  --flip-depth: clamp(12px, 4vw, 20px) !important;
+  --final-x: 2160deg;
+  perspective: 1800px !important;
+}
+.flip-coin-inner {
+  transform-style: preserve-3d !important;
+}
+
+/* Solid center slab: it sits between the two faces and becomes the edge
+   when the coin turns sideways, preventing the transparent see-through line. */
+.flip-coin-inner::before {
+  inset: 0 !important;
+  transform: translateZ(0) !important;
+  border-radius: 50% !important;
+  background:
+    radial-gradient(circle at 50% 50%, #f8fafc 0 56%, #cbd5e1 64%, #64748b 83%, #334155 100%) !important;
+  box-shadow:
+    0 0 0 calc(var(--flip-depth) * .72) #94a3b8,
+    0 0 0 var(--flip-depth) #475569,
+    inset 0 0 26px rgba(15,23,42,.35) !important;
+  backface-visibility: visible !important;
+  -webkit-backface-visibility: visible !important;
+}
+
+/* Extra edge strip. This is intentionally a flattened circle in the middle
+   of the coin; when rotating on X it reads as the connected coin wall. */
+.flip-coin-inner::after {
+  content: "" !important;
+  position: absolute !important;
+  inset: 1.25% !important;
+  border-radius: 50% !important;
+  transform: rotateX(90deg) scaleY(.16) !important;
+  background: linear-gradient(180deg, #334155, #f8fafc 48%, #475569) !important;
+  box-shadow:
+    0 0 calc(var(--flip-depth) * 1.25) rgba(15,23,42,.42),
+    inset 0 0 10px rgba(255,255,255,.28) !important;
+  backface-visibility: visible !important;
+  -webkit-backface-visibility: visible !important;
+  pointer-events: none !important;
+}
+
+.flip-face {
+  clip-path: circle(50% at 50% 50%) !important;
+  transform-style: preserve-3d !important;
+}
+.flip-face-heads {
+  transform: translateZ(var(--flip-depth)) !important;
+}
+.flip-face-tails {
+  transform: rotateX(180deg) translateZ(var(--flip-depth)) !important;
+}
+
+.flip-coin.is-waiting .flip-coin-inner {
+  animation: flip-ready-vertical 1200ms ease-in-out infinite !important;
+}
+@keyframes flip-ready-vertical {
+  0%, 100% { transform: translate3d(0,0,0) rotateX(0deg) rotateY(-8deg) rotateZ(0deg); }
+  50%      { transform: translate3d(0,-6px,0) rotateX(8deg) rotateY(8deg) rotateZ(0deg); }
+}
+
+.flip-coin.is-tossing .flip-coin-inner {
+  animation: flip-toss-vertical var(--toss-duration, 1500ms) cubic-bezier(.16,.76,.18,1) forwards !important;
+}
+@keyframes flip-toss-vertical {
+  0%   { transform: translate3d(0, 0, 0) rotateX(0deg) rotateY(0deg) rotateZ(0deg) scale(1); }
+  12%  { transform: translate3d(0, -36px, 0) rotateX(420deg) rotateY(0deg) rotateZ(0deg) scale(1.025); }
+  30%  { transform: translate3d(0, -104px, 0) rotateX(900deg) rotateY(0deg) rotateZ(0deg) scale(1.055); }
+  52%  { transform: translate3d(0, -122px, 0) rotateX(1440deg) rotateY(0deg) rotateZ(0deg) scale(1.06); }
+  72%  { transform: translate3d(0, -52px, 0) rotateX(calc(var(--final-x, 2160deg) - 170deg)) rotateY(0deg) rotateZ(0deg) scale(1.025); }
+  86%  { transform: translate3d(0, 0, 0) rotateX(calc(var(--final-x, 2160deg) + 10deg)) rotateY(0deg) rotateZ(0deg) scale(1.045, .94); }
+  94%  { transform: translate3d(0, -7px, 0) rotateX(calc(var(--final-x, 2160deg) - 4deg)) rotateY(0deg) rotateZ(0deg) scale(.99, 1.025); }
+  100% { transform: translate3d(0, 0, 0) rotateX(var(--final-x, 2160deg)) rotateY(0deg) rotateZ(0deg) scale(1); }
+}
+
+.flip-coin.is-tossing .flip-coin-shadow {
+  animation: flip-shadow-vertical var(--toss-duration, 1500ms) cubic-bezier(.16,.76,.18,1) forwards !important;
+}
+@keyframes flip-shadow-vertical {
+  0%, 100% { transform: translateX(-50%) scaleX(1); opacity: .42; }
+  30%      { transform: translateX(-50%) scaleX(.48); opacity: .20; }
+  52%      { transform: translateX(-50%) scaleX(.30); opacity: .12; }
+  76%      { transform: translateX(-50%) scaleX(.78); opacity: .30; }
+  86%      { transform: translateX(-50%) scaleX(.96); opacity: .38; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .flip-coin.is-tossing .flip-coin-inner {
+    transform: rotateX(var(--final-x, 2160deg)) !important;
+    transition: transform 420ms ease-out !important;
+  }
+}

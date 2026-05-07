@@ -1297,6 +1297,7 @@
     els.flipSub.textContent = 'Server is choosing the result…';
     const inner = els.flipCoinInner;
     inner.style.removeProperty('--final-y');
+    inner.style.removeProperty('--final-x');
     inner.style.removeProperty('--toss-duration');
     inner.style.transform = '';
     els.flipCoin.classList.remove('is-tossing');
@@ -1314,12 +1315,14 @@
       // Heads = even number of half-turns (lands face up).
       // Tails = odd number of half-turns. Multiply by 360 for a clean
       // multi-rotation finish, then add 180 for tails.
-      const finalY = (result === 'heads') ? '2880deg' : '3060deg';
-      // Keep the flip short and readable; long spins make the back face look muddy.
-      const configuredDuration = Number(CONFIG.DEFAULT_FLIP_DURATION_MS) || 2800;
-      const dur = Math.min(Math.max(configuredDuration, 2300), 3400);
+      const finalX = (result === 'heads') ? '2160deg' : '2340deg';
+      // Fast readable vertical flip: about 1.5s of motion, then result.
+      const configuredDuration = Number(CONFIG.DEFAULT_FLIP_DURATION_MS) || 1500;
+      const dur = Math.min(Math.max(configuredDuration, 1350), 1650);
 
-      inner.style.setProperty('--final-y', finalY);
+      inner.style.setProperty('--final-x', finalX);
+      // Keep the old variable updated too so older fallback CSS never lands wrong.
+      inner.style.setProperty('--final-y', (result === 'heads') ? '2880deg' : '3060deg');
       inner.style.setProperty('--toss-duration', `${dur}ms`);
       coin.style.setProperty('--toss-duration', `${dur}ms`);
 
