@@ -348,6 +348,40 @@
     return Math.floor(n).toLocaleString('en-US', { maximumFractionDigits: 0 });
   }
 
+  // Balance colors: red at $0, then brighter tiers as the player climbs.
+  // Past $10,000 it intentionally becomes clean white.
+  function getBalanceTone(balance) {
+    const n = Math.max(0, Math.floor(Number(balance) || 0));
+    if (n >= 10000) return { key: 'b-white', bg: '#f8fafc', fg: '#0f172a', glow: 'rgba(248, 250, 252, 0.34)' };
+    if (n >= 2000)  return { key: 'b-2000',  bg: '#d946ef', fg: '#fff7ff', glow: 'rgba(217, 70, 239, 0.42)' };
+    if (n >= 1500)  return { key: 'b-1500',  bg: '#8b5cf6', fg: '#ffffff', glow: 'rgba(139, 92, 246, 0.45)' };
+    if (n >= 1000)  return { key: 'b-1000',  bg: '#3b82f6', fg: '#eff6ff', glow: 'rgba(59, 130, 246, 0.42)' };
+    if (n >= 500)   return { key: 'b-500',   bg: '#06b6d4', fg: '#ecfeff', glow: 'rgba(6, 182, 212, 0.40)' };
+    if (n >= 400)   return { key: 'b-400',   bg: '#14b8a6', fg: '#ecfdf5', glow: 'rgba(20, 184, 166, 0.38)' };
+    if (n >= 300)   return { key: 'b-300',   bg: '#22c55e', fg: '#052e16', glow: 'rgba(34, 197, 94, 0.38)' };
+    if (n >= 200)   return { key: 'b-200',   bg: '#84cc16', fg: '#1a2e05', glow: 'rgba(132, 204, 22, 0.38)' };
+    if (n >= 100)   return { key: 'b-100',   bg: '#facc15', fg: '#422006', glow: 'rgba(250, 204, 21, 0.40)' };
+    if (n > 0) {
+      const t = Math.min(1, n / 100);
+      return {
+        key: 'b-low',
+        bg: `color-mix(in srgb, #ef4444 ${Math.round(100 - t * 48)}%, #22c55e ${Math.round(t * 52)}%)`,
+        fg: '#fff7ed',
+        glow: 'rgba(245, 158, 11, 0.32)'
+      };
+    }
+    return { key: 'b-zero', bg: '#ef4444', fg: '#fff1f2', glow: 'rgba(239, 68, 68, 0.42)' };
+  }
+
+  function applyBalanceTone(el, balance) {
+    if (!el) return;
+    const tone = getBalanceTone(balance);
+    el.dataset.balanceTone = tone.key;
+    el.style.setProperty('--balance-bg', tone.bg);
+    el.style.setProperty('--balance-fg', tone.fg);
+    el.style.setProperty('--balance-glow', tone.glow);
+  }
+
   function parseWholeDollars(value) {
     const raw = String(value ?? '').replace(/,/g, '').trim();
     if (!/^\d+$/.test(raw)) return null;
@@ -516,6 +550,7 @@
     els.topbar.hidden = false;
     els.balancePill.hidden = false;
     els.balanceValue.textContent = formatMoney(state.user.balance);
+    applyBalanceTone(els.balancePill, state.user.balance);
     els.userName.hidden = false;
     els.userName.textContent = state.user.username;
     els.logoutBtn.hidden = false;
@@ -703,9 +738,10 @@
       if (state.activeMainTab === 'lobby') refreshOpenGames({ silent: true }).catch(() => {});
       if (state.activeMainTab === 'leaderboard' && state.pollTick % 6 === 0) refreshLeaderboard({ silent: true }).catch(() => {});
 
-      // Balance changes only after actions/completions; this is just a backup.
-      if (state.pollTick % 3 === 0) refreshMe().catch(() => {});
-    }, Math.max(4000, Number(CONFIG.POLLING_INTERVAL_MS) || 5000));
+      // Balance changes after actions/completions; keep this fresh so
+      // the creator of a game sees the result without touching refresh.
+      refreshMe().catch(() => {});
+    }, Math.max(2500, Number(CONFIG.POLLING_INTERVAL_MS) || 4000));
   }
   function stopPolling() {
     if (state.pollTimer) clearInterval(state.pollTimer);
@@ -1105,7 +1141,9 @@
       const node = els.tplLbRow.content.firstElementChild.cloneNode(true);
       $('.lb-rank', node).textContent    = u.rank;
       $('.lb-name', node).textContent    = u.username;
-      $('.lb-balance', node).textContent = formatMoney(u.balance);
+      const lbBalance = $('.lb-balance', node);
+      lbBalance.textContent = formatMoney(u.balance);
+      applyBalanceTone(lbBalance, u.balance);
       if (u.rank === 1) node.classList.add('is-top1');
       else if (u.rank === 2) node.classList.add('is-top2');
       else if (u.rank === 3) node.classList.add('is-top3');
@@ -1318,7 +1356,9 @@
     // the result banner doesn't double-fire on the next poll.
     if (state.seenCompletedIds) state.seenCompletedIds.add(game.id);
 
-    // Refresh other panels in the background
+    // Refresh other panels in the background, including the open-game
+    // count that decides whether a $0 player is truly eliminated.
+    refreshOwnOpenGamesCount().then(() => { updateWagerLimitUI(); applyEliminatedState(); }).catch(() => {});
     refreshOpenGames().catch(() => {});
     refreshMyGames().catch(() => {});
     refreshLeaderboard().catch(() => {});
@@ -1398,8 +1438,9 @@
     on(document, 'visibilitychange', () => {
       if (document.hidden) return;
       if (!state.user) return;
+      refreshMe().catch(() => {});
       refreshMyGames({ forNotification: true, silent: true }).catch(() => {});
-      if (state.activeMainTab === 'lobby') refreshOpenGames({ silent: true }).catch(() => {});
+      refreshOpenGames({ silent: true }).catch(() => {});
       if (state.activeMainTab === 'leaderboard') refreshLeaderboard({ silent: true }).catch(() => {});
     });
   }

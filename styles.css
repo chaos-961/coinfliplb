@@ -435,7 +435,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 }
 .auth-card {
   width: 100%;
-  max-width: 440px;
+  max-width: 520px;
   background: color-mix(in srgb, var(--bg-elev) 82%, transparent);
   backdrop-filter: blur(18px) saturate(140%);
   -webkit-backdrop-filter: blur(18px) saturate(140%);
@@ -1595,4 +1595,185 @@ body.is-eliminated .topbar .balance-pill {
   .lost-coin { width: 44px; height: 44px; font-size: 13px; }
   .lost-copy h2 { font-size: 20px; }
   .lost-copy p { font-size: 13px; }
+}
+
+/* =====================================================================
+   v0.9 live result + money color polish + rebuilt flip showcase
+   ===================================================================== */
+
+/* Balance pill now follows the player's balance tier. JS sets the vars. */
+.balance-pill {
+  background: linear-gradient(135deg,
+    color-mix(in srgb, var(--balance-bg, #fbbf24) 88%, #ffffff 12%) 0%,
+    color-mix(in srgb, var(--balance-bg, #d97706) 72%, #000000 28%) 100%);
+  color: var(--balance-fg, #261901);
+  box-shadow:
+    0 8px 24px -9px var(--balance-glow, rgba(251, 191, 36, 0.6)),
+    inset 0 1px 0 rgba(255,255,255,0.42),
+    inset 0 -1px 0 rgba(0,0,0,0.18);
+  border: 1px solid color-mix(in srgb, var(--balance-bg, #fbbf24) 70%, #ffffff 18%);
+}
+.balance-pill[data-balance-tone="b-white"] {
+  text-shadow: none;
+  border-color: rgba(255,255,255,0.72);
+}
+.balance-pill .balance-value { font-variant-numeric: tabular-nums; }
+
+/* Leaderboard: top players feel premium, and balances share the money palette. */
+.leaderboard-rows .lb-row {
+  isolation: isolate;
+}
+.leaderboard-rows .lb-row::before {
+  width: 4px;
+  opacity: .9;
+}
+.lb-row.is-top1 {
+  background:
+    radial-gradient(circle at 8% 50%, rgba(251,191,36,.24), transparent 38%),
+    linear-gradient(135deg, color-mix(in srgb, var(--bg-elev) 82%, #fbbf24 18%), var(--bg-elev));
+  border-color: rgba(251,191,36,.48);
+  box-shadow: var(--shadow-sm), 0 0 28px -18px #fbbf24;
+}
+.lb-row.is-top1::before { background: linear-gradient(180deg, #fff7ad, #f59e0b); }
+.lb-row.is-top2 {
+  background:
+    radial-gradient(circle at 8% 50%, rgba(226,232,240,.18), transparent 38%),
+    linear-gradient(135deg, color-mix(in srgb, var(--bg-elev) 86%, #e5e7eb 14%), var(--bg-elev));
+  border-color: rgba(203,213,225,.42);
+}
+.lb-row.is-top2::before { background: linear-gradient(180deg, #f8fafc, #94a3b8); }
+.lb-row.is-top3 {
+  background:
+    radial-gradient(circle at 8% 50%, rgba(217,119,6,.18), transparent 38%),
+    linear-gradient(135deg, color-mix(in srgb, var(--bg-elev) 86%, #d97706 14%), var(--bg-elev));
+  border-color: rgba(217,119,6,.44);
+}
+.lb-row.is-top3::before { background: linear-gradient(180deg, #fdba74, #92400e); }
+.lb-row.is-me {
+  outline: 1px solid rgba(139, 92, 246, .38);
+  background:
+    radial-gradient(circle at 14% 50%, rgba(139,92,246,.16), transparent 38%),
+    color-mix(in srgb, var(--bg-elev) 90%, var(--primary) 10%);
+}
+.lb-balance {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: 92px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  color: var(--balance-fg, var(--gold));
+  background: linear-gradient(135deg,
+    color-mix(in srgb, var(--balance-bg, #fbbf24) 86%, #ffffff 14%),
+    color-mix(in srgb, var(--balance-bg, #d97706) 70%, #000000 30%));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.28), 0 8px 18px -14px var(--balance-glow, rgba(251,191,36,.55));
+}
+.lb-balance[data-balance-tone="b-white"] {
+  color: #0f172a;
+  background: linear-gradient(135deg, #ffffff, #e2e8f0);
+}
+
+/* Coin texture fix: force every layer into a real circle and hide any square artifacts. */
+.coin,
+.coin-inner,
+.coin-face,
+.coin::after,
+.coin-inner::before {
+  border-radius: 50%;
+}
+.coin-face {
+  overflow: hidden;
+  clip-path: circle(50% at 50% 50%);
+}
+.coin::after {
+  clip-path: circle(50% at 50% 50%);
+}
+.coin-heads {
+  background:
+    radial-gradient(circle at 32% 24%, rgba(255,255,255,.82) 0 10%, transparent 11%),
+    radial-gradient(circle at 48% 48%, #ffe08a 0 36%, #f2aa12 58%, #9b6506 100%);
+}
+.coin-tails {
+  background:
+    radial-gradient(circle at 32% 24%, rgba(255,255,255,.90) 0 10%, transparent 11%),
+    radial-gradient(circle at 48% 48%, #f8fafc 0 34%, #cbd5e1 58%, #64748b 100%);
+}
+.coin-heads::before { border-color: rgba(92,58,0,.30); }
+.coin-tails::before { border-color: rgba(45,51,70,.30); }
+
+/* Bigger, cleaner flip presentation. */
+.modal {
+  max-width: 560px;
+}
+.flip-title {
+  font-size: clamp(19px, 2.6vw, 24px);
+}
+.flip-stage {
+  min-height: clamp(270px, 45vh, 380px);
+  overflow: visible;
+  perspective: 1500px;
+  border: 1px solid color-mix(in srgb, var(--primary) 20%, transparent);
+  background:
+    radial-gradient(circle at 50% 54%, color-mix(in srgb, var(--primary) 18%, transparent) 0%, transparent 48%),
+    radial-gradient(ellipse at 50% 84%, rgba(0,0,0,.28), transparent 44%);
+}
+.coin-xl {
+  width: clamp(190px, 30vw, 240px);
+  height: clamp(190px, 30vw, 240px);
+}
+.coin-xl .coin-face {
+  font-size: clamp(82px, 12vw, 106px);
+}
+.coin-xl .coin-shadow {
+  bottom: -34px;
+  width: 76%;
+  height: 22px;
+  filter: blur(6px);
+}
+
+/* A more readable flip: one high toss, fast edge spins, then squash/bounce settle. */
+.coin.is-waiting .coin-inner {
+  animation: coin-ready-showcase 1500ms ease-in-out infinite;
+}
+@keyframes coin-ready-showcase {
+  0%, 100% { transform: translate3d(0,0,0) rotateX(12deg) rotateY(-18deg) rotateZ(-2deg); }
+  50%      { transform: translate3d(0,-10px,0) rotateX(-10deg) rotateY(22deg) rotateZ(2deg); }
+}
+.coin.is-tossing .coin-inner {
+  animation: coin-flip-showcase var(--toss-duration, 2800ms) cubic-bezier(.15,.82,.18,1) forwards;
+}
+@keyframes coin-flip-showcase {
+  0%   { transform: translate3d(0, 0, 0) rotateX(0deg) rotateY(0deg) rotateZ(0deg) scale(1); }
+  8%   { transform: translate3d(-10px, -36px, 0) rotateX(260deg) rotateY(230deg) rotateZ(-8deg) scale(1.04); }
+  18%  { transform: translate3d(12px, -105px, 0) rotateX(720deg) rotateY(540deg) rotateZ(7deg) scale(1.08); }
+  32%  { transform: translate3d(-8px, -156px, 0) rotateX(1320deg) rotateY(870deg) rotateZ(-5deg) scale(1.10); }
+  48%  { transform: translate3d(10px, -132px, 0) rotateX(1980deg) rotateY(1210deg) rotateZ(5deg) scale(1.08); }
+  64%  { transform: translate3d(-6px, -76px, 0) rotateX(2640deg) rotateY(1580deg) rotateZ(-3deg) scale(1.05); }
+  80%  { transform: translate3d(3px, -20px, 0) rotateX(3240deg) rotateY(calc(var(--final-y, 2160deg) - 140deg)) rotateZ(1deg) scale(1.02); }
+  90%  { transform: translate3d(0, 0, 0) rotateX(3600deg) rotateY(var(--final-y, 2160deg)) rotateZ(0deg) scale(1.08, .90); }
+  95%  { transform: translate3d(0, -9px, 0) rotateX(3600deg) rotateY(var(--final-y, 2160deg)) rotateZ(0deg) scale(.97, 1.05); }
+  100% { transform: translate3d(0, 0, 0) rotateX(3600deg) rotateY(var(--final-y, 2160deg)) rotateZ(0deg) scale(1); }
+}
+.coin-xl.is-tossing .coin-shadow {
+  animation: coin-shadow-showcase var(--toss-duration, 2800ms) cubic-bezier(.15,.82,.18,1) forwards;
+}
+@keyframes coin-shadow-showcase {
+  0%, 100% { transform: translateX(-50%) scaleX(1); opacity: .42; }
+  18%      { transform: translateX(-50%) scaleX(.52); opacity: .20; }
+  34%      { transform: translateX(-50%) scaleX(.30); opacity: .12; }
+  62%      { transform: translateX(-50%) scaleX(.56); opacity: .22; }
+  88%      { transform: translateX(-50%) scaleX(.92); opacity: .36; }
+}
+
+@media (max-width: 720px) {
+  .modal { max-width: min(100%, 520px); }
+  .flip-stage { min-height: clamp(250px, 42vh, 330px); }
+  .coin-xl { width: clamp(170px, 58vw, 220px); height: clamp(170px, 58vw, 220px); }
+  .coin-xl .coin-face { font-size: clamp(72px, 25vw, 96px); }
+  .lb-balance { min-width: 78px; padding-inline: 8px; }
+}
+@media (max-height: 680px) {
+  .flip-stage { min-height: 230px; }
+  .coin-xl { width: 166px; height: 166px; }
+  .coin-xl .coin-face { font-size: 72px; }
 }
