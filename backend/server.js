@@ -65,18 +65,8 @@ if (!JWT_SECRET || JWT_SECRET.length < 16) {
 // ---------------------------------------------------------------------
 const app = express();
 
-// Trust the first proxy hop so rate limiting sees the real client IP
-// when running behind Railway's load balancer.
 app.set('trust proxy', 1);
 
-app.use(express.json({ limit: '32kb' }));
-
-// CORS section here first
-app.use(cors(corsOptions));
-app.options('*', cors(corsOptions));
-
-// CORS: allow only our known frontend origins. We always allow common
-// localhost origins so you can develop the frontend locally.
 const allowedOrigins = new Set([
   'https://coinfliplb.com',
   'https://www.coinfliplb.com',
@@ -109,6 +99,11 @@ const corsOptions = {
   methods: ['GET', 'POST', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
 };
+
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
+
+app.use(express.json({ limit: '32kb' }));
 
 // ---------------------------------------------------------------------
 // Rate limiting (auth endpoints are the main brute-force surface)
