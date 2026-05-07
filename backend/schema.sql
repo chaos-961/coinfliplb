@@ -1,5 +1,5 @@
 -- =====================================================================
--- Coinflip LB - PostgreSQL schema (v0.9)
+-- Coinflip Gold - PostgreSQL schema (v1.0)
 -- ---------------------------------------------------------------------
 -- Run this once against your Railway PostgreSQL database to create the
 -- tables. See backend/README.md for instructions.

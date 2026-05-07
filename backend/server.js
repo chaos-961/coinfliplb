@@ -1,5 +1,5 @@
 // =====================================================================
-// server.js — Coinflip LB backend (v0.9)
+// server.js — Coinflip Gold backend (v1.0)
 // ---------------------------------------------------------------------
 // This is the single source of truth for the game. The frontend is
 // purely a UI: every important decision (who wins a flip, what your
@@ -79,6 +79,8 @@ const MAX_WAGER           = 1_000_000;        // tightened from 10B to 1M
 const MAX_BALANCE         = 1_000_000_000;    // hard cap so leaderboard can't run away
 const MAX_OPEN_GAMES_PER_USER = 5;             // a single user can hold at most this many open games at once
 const TOKEN_EXPIRES_IN    = '7d';
+const BCRYPT_COST         = 12;
+const REQUIRE_STRONG_PASSWORD = String(process.env.REQUIRE_STRONG_PASSWORD || '').toLowerCase() === 'true';
 
 if (!Number.isSafeInteger(STARTING_BALANCE) || STARTING_BALANCE < 0) {
   console.error('[startup] STARTING_BALANCE must be a whole number >= 0.');
@@ -100,12 +102,13 @@ if (!JWT_SECRET || JWT_SECRET.length < 16) {
 // (The previous hard-coded literal was not a valid bcrypt hash and
 //  caused bcrypt.compare to throw, defeating the timing-safety goal.)
 // ---------------------------------------------------------------------
-const DUMMY_HASH = bcrypt.hashSync(crypto.randomBytes(16).toString('hex'), 12);
+const DUMMY_HASH = bcrypt.hashSync(crypto.randomBytes(16).toString('hex'), BCRYPT_COST);
 
 // ---------------------------------------------------------------------
 // Express app setup
 // ---------------------------------------------------------------------
 const app = express();
+app.disable('x-powered-by');
 
 // Trust proxy hops for correct client IPs behind Railway's load balancer.
 app.set('trust proxy', TRUST_PROXY);
@@ -121,7 +124,23 @@ app.use(helmet({
   crossOriginResourcePolicy: { policy: 'cross-origin' },
 }));
 
-app.use(express.json({ limit: '32kb' }));
+app.use(express.json({ limit: '32kb', strict: true }));
+
+// API responses should not be cached by browsers or shared proxies.
+app.use('/api/', (req, res, next) => {
+  res.set('Cache-Control', 'no-store');
+  res.set('Pragma', 'no-cache');
+  next();
+});
+
+// JSON-only write API. This blocks accidental form posts and some CSRF-style probes.
+app.use('/api/', (req, res, next) => {
+  const hasContentType = Boolean(req.headers['content-type']);
+  if (['POST', 'PUT', 'PATCH'].includes(req.method) && hasContentType && !req.is('application/json')) {
+    return res.status(415).json({ error: 'Content-Type must be application/json.' });
+  }
+  next();
+});
 
 // CORS: allow only our known frontend origins. We always allow common
 // localhost origins so you can develop the frontend locally.
@@ -194,6 +213,14 @@ const createGameLimiter = rateLimit({
   message: { error: 'You are creating games too quickly. Slow down.' },
 });
 
+const gameActionLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 45,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many game actions. Slow down and try again.' },
+});
+
 app.use('/api/', generalLimiter);
 
 // ---------------------------------------------------------------------
@@ -257,11 +284,20 @@ function secureCoinFlip() {
   return (byte & 1) === 0 ? 'heads' : 'tails';
 }
 
+function normalizeUsername(value) {
+  return String(value || '').trim().replace(/\s+/g, '');
+}
+
 function isValidUsername(u) {
   return typeof u === 'string'
       && u.length >= MIN_USERNAME_LENGTH
       && u.length <= MAX_USERNAME_LENGTH
       && /^[a-zA-Z0-9_.-]+$/.test(u);
+}
+
+function isStrongEnoughPassword(password) {
+  if (!REQUIRE_STRONG_PASSWORD) return true;
+  return /[a-z]/.test(password) && /[A-Z]/.test(password) && /\d/.test(password);
 }
 
 // ---------------------------------------------------------------------
@@ -274,8 +310,13 @@ function requireAuth(req, res, next) {
     return res.status(401).json({ error: 'Missing or malformed Authorization header.' });
   }
   try {
-    const payload = jwt.verify(token, JWT_SECRET);
-    req.user = { id: payload.uid };
+    if (token.length > 2048) return res.status(401).json({ error: 'Invalid session token.' });
+    const payload = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] });
+    const uid = Number(payload.uid);
+    if (!Number.isSafeInteger(uid) || uid <= 0) {
+      return res.status(401).json({ error: 'Invalid session token.' });
+    }
+    req.user = { id: uid };
     next();
   } catch {
     return res.status(401).json({ error: 'Session expired. Please log in again.' });
@@ -308,13 +349,14 @@ app.get('/api/config', (_req, res) => {
     startingBalance: STARTING_BALANCE,
     maxOpenGamesPerUser: MAX_OPEN_GAMES_PER_USER,
     openGameTtlHours: OPEN_GAME_TTL_HOURS,
+    requireStrongPassword: REQUIRE_STRONG_PASSWORD,
   });
 });
 
 // ----- POST /api/auth/signup -----------------------------------------
 app.post('/api/auth/signup', authLimiter, async (req, res) => {
   try {
-    const username = (req.body?.username || '').trim();
+    const username = normalizeUsername(req.body?.username);
     const password = req.body?.password || '';
 
     if (!isValidUsername(username)) {
@@ -329,6 +371,11 @@ app.post('/api/auth/signup', authLimiter, async (req, res) => {
         error: `Password must be ${MIN_PASSWORD_LENGTH}-${MAX_PASSWORD_LENGTH} characters.`
       });
     }
+    if (!isStrongEnoughPassword(password)) {
+      return res.status(400).json({
+        error: 'Password must include lowercase, uppercase, and a number.'
+      });
+    }
 
     // Make uniqueness case-insensitive so "Alice" and "alice" can't both exist.
     const existing = await db.query(
@@ -339,7 +386,7 @@ app.post('/api/auth/signup', authLimiter, async (req, res) => {
       return res.status(409).json({ error: 'That username is already taken.' });
     }
 
-    const password_hash = await bcrypt.hash(password, 12);
+    const password_hash = await bcrypt.hash(password, BCRYPT_COST);
 
     const insert = await db.query(
       `INSERT INTO users (username, password_hash, balance)
@@ -361,7 +408,7 @@ app.post('/api/auth/signup', authLimiter, async (req, res) => {
 // ----- POST /api/auth/login ------------------------------------------
 app.post('/api/auth/login', authLimiter, loginUsernameLimiter, async (req, res) => {
   try {
-    const username = (req.body?.username || '').trim();
+    const username = normalizeUsername(req.body?.username);
     const password = req.body?.password || '';
 
     if (!username || !password) {
@@ -448,7 +495,7 @@ app.post('/api/games', requireAuth, createGameLimiter, async (req, res) => {
     }
     if (Number(me.rows[0].balance) < wager) {
       await client.query('ROLLBACK');
-      return res.status(400).json({ error: 'You do not have enough balance for that wager.' });
+      return res.status(400).json({ error: 'You do not have enough gold for that wager.' });
     }
 
     // Hard cap on concurrent open games per user.
@@ -472,7 +519,7 @@ app.post('/api/games', requireAuth, createGameLimiter, async (req, res) => {
     );
     if (updatedUser.rowCount === 0) {
       await client.query('ROLLBACK');
-      return res.status(409).json({ error: 'Your balance changed. Please try again.' });
+      return res.status(409).json({ error: 'Your gold balance changed. Please try again.' });
     }
 
     const insert = await client.query(
@@ -599,7 +646,7 @@ app.get('/api/games/:id', requireAuth, async (req, res) => {
 
 // ----- POST /api/games/:id/cancel ------------------------------------
 // Cancels an open game created by the current user and refunds escrow.
-app.post('/api/games/:id/cancel', requireAuth, async (req, res) => {
+app.post('/api/games/:id/cancel', requireAuth, gameActionLimiter, async (req, res) => {
   const gameId = parseInt(req.params.id, 10);
   if (!Number.isInteger(gameId) || gameId <= 0) {
     return res.status(400).json({ error: 'Invalid game id.' });
@@ -655,7 +702,7 @@ app.post('/api/games/:id/cancel', requireAuth, async (req, res) => {
 // ----- POST /api/games/:id/join --------------------------------------
 // The creator's wager is already in escrow. Joining deducts the joiner's
 // wager, flips server-side, then pays the full pot (2x wager) to winner.
-app.post('/api/games/:id/join', requireAuth, async (req, res) => {
+app.post('/api/games/:id/join', requireAuth, gameActionLimiter, async (req, res) => {
   const gameId = parseInt(req.params.id, 10);
   if (!Number.isInteger(gameId) || gameId <= 0) {
     return res.status(400).json({ error: 'Invalid game id.' });
@@ -693,7 +740,7 @@ app.post('/api/games/:id/join', requireAuth, async (req, res) => {
     const joiner = joinerRes.rows[0];
     if (Number(joiner.balance) < wager) {
       await client.query('ROLLBACK');
-      return res.status(400).json({ error: 'You do not have enough balance to join this game.' });
+      return res.status(400).json({ error: 'You do not have enough gold to join this game.' });
     }
 
     const creatorRes = await client.query(
@@ -720,7 +767,7 @@ app.post('/api/games/:id/join', requireAuth, async (req, res) => {
     );
     if (debitJoiner.rowCount === 0) {
       await client.query('ROLLBACK');
-      return res.status(409).json({ error: 'Your balance changed. Please try again.' });
+      return res.status(409).json({ error: 'Your gold balance changed. Please try again.' });
     }
 
     // Award pot, capped at MAX_BALANCE for the winner.
@@ -918,7 +965,7 @@ app.use((err, _req, res, _next) => {
 // ---------------------------------------------------------------------
 if (require.main === module) {
   const server = app.listen(PORT, () => {
-    console.log(`[startup] Coinflip LB API listening on :${PORT} (${NODE_ENV})`);
+    console.log(`[startup] Coinflip Gold API listening on :${PORT} (${NODE_ENV})`);
     console.log(`[startup] STARTING_BALANCE = ${STARTING_BALANCE}`);
     console.log(`[startup] FRONTEND_ORIGIN  = ${FRONTEND_ORIGIN || '(none set — only localhost allowed)'}`);
     console.log(`[startup] OPEN_GAME_TTL_HOURS = ${OPEN_GAME_TTL_HOURS}`);

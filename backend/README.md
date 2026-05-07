@@ -1,4 +1,4 @@
-# Coinflip LB — Backend
+# Coinflip Gold — Backend
 
 Node.js + Express + PostgreSQL API. This is the source of truth for accounts,
 balances, and game results. The frontend is a thin client; nothing important

@@ -1,5 +1,5 @@
 /* =====================================================================
-   Coinflip LB — styles.css
+   Coinflip Gold — styles.css
    ---------------------------------------------------------------------
    Sober, modern, dark UI with a violet/gold accent. Mobile-first.
    The coin uses CSS 3D transforms with a multi-stage toss animation.
@@ -173,6 +173,65 @@ body[data-theme="light"] .orb-b { opacity: 0.16; }
 body[data-theme="light"] .orb-c { opacity: 0.18; }
 @media (prefers-reduced-motion: reduce) {
   .bg-orb { animation: none; }
+}
+
+/* --- Toast notifications -------------------------------------------- */
+.toast-stack {
+  position: fixed;
+  top: calc(env(safe-area-inset-top, 0px) + 74px);
+  right: 16px;
+  z-index: 120;
+  display: grid;
+  gap: 10px;
+  width: min(360px, calc(100vw - 32px));
+  pointer-events: none;
+}
+.toast {
+  display: grid;
+  grid-template-columns: 28px 1fr 28px;
+  align-items: start;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--line-2);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--bg-elev) 92%, transparent);
+  color: var(--text);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  pointer-events: auto;
+  animation: toast-enter 220ms cubic-bezier(.2,.8,.2,1) both;
+}
+.toast.is-leaving { animation: toast-leave 180ms ease both; }
+.toast-icon {
+  display: inline-grid; place-items: center;
+  width: 28px; height: 28px; border-radius: 999px;
+  font-weight: 900;
+  background: color-mix(in srgb, var(--primary) 18%, transparent);
+  color: var(--primary-hi);
+}
+.toast-success .toast-icon { background: var(--good-bg); color: var(--good); }
+.toast-error .toast-icon { background: var(--bad-bg); color: var(--bad); }
+.toast-text { font-size: 14px; line-height: 1.35; padding-top: 3px; }
+.toast-close {
+  border: 0; background: transparent; color: var(--text-mute);
+  width: 28px; height: 28px; border-radius: 999px;
+  display: inline-grid; place-items: center;
+  font-weight: 800; line-height: 1;
+}
+.toast-close:hover { background: var(--bg-elev-2); color: var(--text); }
+@keyframes toast-enter {
+  from { transform: translate3d(16px,-8px,0) scale(.98); opacity: 0; }
+  to   { transform: translate3d(0,0,0) scale(1); opacity: 1; }
+}
+@keyframes toast-leave {
+  to { transform: translate3d(18px,-6px,0) scale(.98); opacity: 0; }
+}
+@media (max-width: 640px) {
+  .toast-stack { top: auto; right: 10px; left: 10px; bottom: calc(env(safe-area-inset-bottom, 0px) + 12px); width: auto; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .toast, .toast.is-leaving { animation: none !important; }
 }
 
 /* --- Topbar --------------------------------------------------------- */
@@ -1598,7 +1657,7 @@ body.is-eliminated .topbar .balance-pill {
 }
 
 /* =====================================================================
-   v0.9 live result + money color polish + rebuilt flip showcase
+   v1.0 live result + money color polish + rebuilt flip showcase
    ===================================================================== */
 
 /* Balance pill now follows the player's balance tier. JS sets the vars. */
@@ -2195,8 +2254,8 @@ body {
 .coin-tails > span::before { color: #1f2937; }
 
 /* =====================================================================
-   v0.9 additions — SVG icon buttons in topbar, confirm modal,
-   avatar letters, sound toggle.
+   v1.0 additions — SVG icon buttons in topbar, confirm modal,
+   avatar letters, toast notifications.
    ===================================================================== */
 
 /* Icon buttons live inside the topbar now. */
@@ -2663,3 +2722,42 @@ body[data-view="dashboard"] .theme-toggle:not(.icon-btn) { display: none !import
     transition: transform 420ms ease-out !important;
   }
 }
+
+/* Sound system removed; hide old cached control if present. */
+#sound-toggle { display: none !important; }
+
+.prefix { font-weight: 800; color: var(--gold-deep); }
+.balance-pill::before { content: "◉"; font-size: 11px; filter: drop-shadow(0 1px 2px rgba(90,58,0,.35)); }
+
+/* Password strength meter */
+.password-meter {
+  display: grid;
+  gap: 7px;
+  margin-top: -4px;
+  margin-bottom: 2px;
+}
+.password-meter-bar {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--bg-elev-3);
+  overflow: hidden;
+  border: 1px solid var(--line);
+}
+.password-meter-bar span {
+  display: block;
+  height: 100%;
+  width: 0%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--bad), var(--warn), var(--good));
+  transition: width 180ms ease;
+}
+.password-meter-text {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.password-meter[data-score="0"] .password-meter-text,
+.password-meter[data-score="1"] .password-meter-text { color: var(--bad); }
+.password-meter[data-score="2"] .password-meter-text,
+.password-meter[data-score="3"] .password-meter-text { color: var(--warn); }
+.password-meter[data-score="4"] .password-meter-text,
+.password-meter[data-score="5"] .password-meter-text { color: var(--good); }

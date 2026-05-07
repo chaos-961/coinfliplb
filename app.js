@@ -1,5 +1,5 @@
 /* =====================================================================
-   Coinflip LB — app.js (v0.9)
+   Coinflip Gold — app.js (v1.0)
    ---------------------------------------------------------------------
    Single-file SPA logic. No frameworks.
    - Inline feedback (no toast popups)
@@ -8,7 +8,6 @@
    - Result banner when one of the user's open games is joined+completed
    - Multi-stage 3D coin flip animation
    - Creator-side flip animation when their game is joined
-   - Web Audio sound effects (no external assets)
    - In-app confirm modal (no native confirm())
    - Runtime config pulled from /api/config
    ===================================================================== */
@@ -26,18 +25,18 @@
   const API = String(CONFIG.API_BASE_URL).replace(/\/+$/, '');
   const TOKEN_KEY = 'cfa_token';
   const THEME_KEY = 'cfa_theme';
-  const SFX_KEY   = 'cfa_sfx';
   const SEEN_COMPLETED_PREFIX = 'cfa_seen_completed_';
   const PENDING_CREATED_PREFIX = 'cfa_pending_created_';
 
-  function loadSfxPref() {
-    const stored = localStorage.getItem(SFX_KEY);
-    if (stored === null) return CONFIG.SFX_ENABLED_BY_DEFAULT !== false;
-    return stored === '1';
+  // Keep auth tokens in sessionStorage so closing the browser clears the session.
+  // A legacy localStorage token is accepted once, then migrated away on sign-in.
+  const tokenStorage = window.sessionStorage;
+  function loadStoredToken() {
+    return tokenStorage.getItem(TOKEN_KEY) || localStorage.getItem(TOKEN_KEY) || null;
   }
 
   const state = {
-    token:          localStorage.getItem(TOKEN_KEY) || null,
+    token:          loadStoredToken(),
     user:           null,
     activeAuthTab:  'login',
     activeMainTab:  'lobby',
@@ -54,7 +53,6 @@
     lastBannerGameId: null,
     ownOpenGamesCount: null,
     theme:          localStorage.getItem(THEME_KEY) || 'dark',
-    sfxEnabled:     loadSfxPref(),
     runtimeConfig:  null,
   };
 
@@ -114,8 +112,7 @@
       themeToggleAuth: $('#theme-toggle-auth'),
       themeIconPath: $('#theme-icon-path'),
       themeIconPathAuth: $('#theme-icon-path-auth'),
-      soundToggle:   $('#sound-toggle'),
-      soundIconPath: $('#sound-icon-path'),
+      toastStack:    $('#toast-stack'),
       lostCard:      $('#lost-card'),
       lostSignout:   $('#lost-signout'),
 
@@ -129,6 +126,9 @@
       signupUsername:   $('#signup-username'),
       signupPassword:   $('#signup-password'),
       signupConfirm:    $('#signup-confirm'),
+      passwordMeter:   $('#password-meter'),
+      passwordMeterFill: $('#password-meter-fill'),
+      passwordMeterText: $('#password-meter-text'),
       loginBtn:         $('#login-btn'),
       signupBtn:        $('#signup-btn'),
       loginFeedback:    $('#login-feedback'),
@@ -213,107 +213,14 @@
   }
 
   // -------------------------------------------------------------------
-  // SOUND EFFECTS — Web Audio API, no external assets
+  // Motion-only feedback — no sound system by design
   // -------------------------------------------------------------------
-  let audioCtx = null;
-
-  function getCtx() {
-    if (!state.sfxEnabled) return null;
-    if (!audioCtx) {
-      try {
-        const Ctor = window.AudioContext || window.webkitAudioContext;
-        if (!Ctor) return null;
-        audioCtx = new Ctor();
-      } catch { return null; }
-    }
-    if (audioCtx.state === 'suspended') {
-      audioCtx.resume().catch(() => {});
-    }
-    return audioCtx;
-  }
-
-  function playTone({ freq = 440, dur = 0.08, type = 'sine', gain = 0.12, attack = 0.005, release = 0.06, freqEnd = null } = {}) {
-    const ctx = getCtx();
-    if (!ctx) return;
-    const t0 = ctx.currentTime;
-    const osc = ctx.createOscillator();
-    const g   = ctx.createGain();
-    osc.type = type;
-    osc.frequency.setValueAtTime(freq, t0);
-    if (freqEnd !== null) {
-      try { osc.frequency.exponentialRampToValueAtTime(Math.max(1, freqEnd), t0 + dur); } catch {}
-    }
-    g.gain.setValueAtTime(0, t0);
-    g.gain.linearRampToValueAtTime(gain, t0 + attack);
-    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur + release);
-    osc.connect(g).connect(ctx.destination);
-    osc.start(t0);
-    osc.stop(t0 + dur + release + 0.02);
-  }
-
-  let tickInterval = null;
-  function startFlipTicks(durationMs) {
-    if (!state.sfxEnabled) return;
-    stopFlipTicks();
-    let i = 0;
-    const total = Math.max(1, Math.floor(durationMs / 110));
-    tickInterval = setInterval(() => {
-      const pitch = 1300 + (Math.sin(i * 0.7) * 180) + (i * 4);
-      playTone({ freq: pitch, dur: 0.02, type: 'square', gain: 0.045, attack: 0.001, release: 0.02 });
-      i += 1;
-      if (i >= total) stopFlipTicks();
-    }, 110);
-  }
-  function stopFlipTicks() {
-    if (tickInterval) { clearInterval(tickInterval); tickInterval = null; }
-  }
-
-  function playLandSound() {
-    if (!state.sfxEnabled) return;
-    playTone({ freq: 660, dur: 0.05, type: 'triangle', gain: 0.16, freqEnd: 220 });
-    setTimeout(() => playTone({ freq: 220, dur: 0.12, type: 'sine', gain: 0.10, freqEnd: 140 }), 60);
-  }
-
-  function playWinSound() {
-    if (!state.sfxEnabled) return;
-    [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => {
-      setTimeout(() => playTone({ freq: f, dur: 0.10, type: 'triangle', gain: 0.13 }), i * 90);
-    });
-  }
-
-  function playLossSound() {
-    if (!state.sfxEnabled) return;
-    [392, 311.13, 233.08].forEach((f, i) => {
-      setTimeout(() => playTone({ freq: f, dur: 0.16, type: 'sawtooth', gain: 0.10 }), i * 110);
-    });
-  }
-
-  function playClick() {
-    if (!state.sfxEnabled) return;
-    playTone({ freq: 920, dur: 0.02, type: 'square', gain: 0.05 });
-  }
-
-  function applySfxIcon() {
-    if (!els.soundIconPath || !els.soundToggle) return;
-    if (state.sfxEnabled) {
-      els.soundIconPath.setAttribute('d', 'M11 5L6 9H3v6h3l5 4V5zm5.5 7a4.5 4.5 0 0 0-2.5-4v8a4.5 4.5 0 0 0 2.5-4z');
-      els.soundToggle.title = 'Mute sounds';
-      els.soundToggle.setAttribute('aria-label', 'Mute sounds');
-      els.soundToggle.classList.remove('is-muted');
-    } else {
-      els.soundIconPath.setAttribute('d', 'M11 5L6 9H3v6h3l5 4V5zm5 4l5 5m0-5l-5 5');
-      els.soundToggle.title = 'Unmute sounds';
-      els.soundToggle.setAttribute('aria-label', 'Unmute sounds');
-      els.soundToggle.classList.add('is-muted');
-    }
-  }
-
-  function toggleSfx() {
-    state.sfxEnabled = !state.sfxEnabled;
-    localStorage.setItem(SFX_KEY, state.sfxEnabled ? '1' : '0');
-    applySfxIcon();
-    if (state.sfxEnabled) playClick();
-  }
+  function startFlipTicks() {}
+  function stopFlipTicks() {}
+  function playLandSound() {}
+  function playWinSound() {}
+  function playLossSound() {}
+  function playClick() {}
 
   // -------------------------------------------------------------------
   // API helper
@@ -373,17 +280,56 @@
   // Inline feedback
   // -------------------------------------------------------------------
   function showFeedback(el, message, type = 'info') {
-    if (!el) return;
+    if (!el || !message) return;
     el.textContent = message;
     el.classList.remove('is-error', 'is-success', 'is-info');
     el.classList.add(`is-${type}`);
     el.hidden = false;
+    notify(message, type);
   }
   function clearFeedback(el) {
     if (!el) return;
     el.hidden = true;
     el.textContent = '';
     el.classList.remove('is-error', 'is-success', 'is-info');
+  }
+
+
+  function showToast(message, type = 'info', { timeout = 5200 } = {}) {
+    if (!els.toastStack || !message) return;
+    const toast = document.createElement('div');
+    toast.className = `toast toast-${type}`;
+    toast.setAttribute('role', type === 'error' ? 'alert' : 'status');
+
+    const icon = document.createElement('span');
+    icon.className = 'toast-icon';
+    icon.textContent = type === 'success' ? '✓' : (type === 'error' ? '!' : 'i');
+
+    const text = document.createElement('div');
+    text.className = 'toast-text';
+    text.textContent = String(message);
+
+    const close = document.createElement('button');
+    close.type = 'button';
+    close.className = 'toast-close';
+    close.setAttribute('aria-label', 'Dismiss notification');
+    close.textContent = '×';
+
+    toast.appendChild(icon);
+    toast.appendChild(text);
+    toast.appendChild(close);
+    els.toastStack.appendChild(toast);
+
+    const dismiss = () => {
+      toast.classList.add('is-leaving');
+      setTimeout(() => toast.remove(), 180);
+    };
+    close.addEventListener('click', dismiss);
+    if (timeout > 0) setTimeout(dismiss, timeout);
+  }
+
+  function notify(message, type = 'info', options) {
+    showToast(message, type, options);
   }
 
   function setLoading(btn, loading) {
@@ -438,8 +384,8 @@
   // Formatting
   // -------------------------------------------------------------------
   function formatMoney(value) {
-    const n = Math.floor(Number(value || 0));
-    return n.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0, maximumFractionDigits: 0 });
+    const n = Math.max(0, Math.floor(Number(value || 0)));
+    return `${n.toLocaleString('en-US')} Gold`;
   }
   function formatRelative(dateInput) {
     if (!dateInput) return '';
@@ -459,7 +405,37 @@
   function capitalize(s) { return s ? s.charAt(0).toUpperCase() + s.slice(1) : s; }
   function compactMoney(value) {
     const n = Number(value || 0);
-    return Math.floor(n).toLocaleString('en-US', { maximumFractionDigits: 0 });
+    return `${Math.floor(n).toLocaleString('en-US')} Gold`;
+  }
+
+
+  function passwordStrength(password) {
+    let score = 0;
+    if (password.length >= getMinPasswordLength()) score += 1;
+    if (password.length >= 10) score += 1;
+    if (/[a-z]/.test(password) && /[A-Z]/.test(password)) score += 1;
+    if (/\d/.test(password)) score += 1;
+    if (/[^a-zA-Z0-9]/.test(password)) score += 1;
+    return Math.min(score, 5);
+  }
+
+  function getMinPasswordLength() {
+    return Number((state.runtimeConfig && state.runtimeConfig.minPasswordLength) || CONFIG.MIN_PASSWORD_LENGTH) || 6;
+  }
+
+  function updatePasswordMeter() {
+    if (!els.passwordMeter || !els.passwordMeterFill || !els.passwordMeterText) return;
+    const password = els.signupPassword ? els.signupPassword.value || '' : '';
+    if (!password) {
+      els.passwordMeter.hidden = true;
+      return;
+    }
+    const score = passwordStrength(password);
+    const labels = ['Too weak', 'Weak', 'Okay', 'Good', 'Strong', 'Excellent'];
+    els.passwordMeter.hidden = false;
+    els.passwordMeter.dataset.score = String(score);
+    els.passwordMeterFill.style.width = `${Math.max(8, score * 20)}%`;
+    els.passwordMeterText.textContent = labels[score];
   }
 
   function getBalanceTone(balance) {
@@ -646,9 +622,9 @@
     } else if (lost) {
       els.wagerInput.placeholder = 'You Lost!';
     } else if (hasOwnOpenGames()) {
-      els.wagerInput.placeholder = 'Money reserved';
+      els.wagerInput.placeholder = 'Gold reserved';
     } else {
-      els.wagerInput.placeholder = 'No money available';
+      els.wagerInput.placeholder = 'No gold available';
     }
 
     const createDisabled = lost || unavailable;
@@ -712,7 +688,8 @@
   function setSession(token, user) {
     state.token = token;
     state.user  = user;
-    if (token) localStorage.setItem(TOKEN_KEY, token);
+    if (token) tokenStorage.setItem(TOKEN_KEY, token);
+    localStorage.removeItem(TOKEN_KEY);
     if (user) loadNotificationSets();
     updateTopbar();
   }
@@ -723,6 +700,7 @@
     state.pendingCreatedGameIds = null;
     state.lastBannerGameId = null;
     state.ownOpenGamesCount = null;
+    tokenStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(TOKEN_KEY);
     stopPolling();
     updateTopbar();
@@ -741,7 +719,7 @@
     els.topbar.hidden = false;
     els.balancePill.hidden = false;
     els.balanceValue.textContent = formatMoney(state.user.balance);
-    els.balancePill.setAttribute('aria-label', `Money ${formatMoney(state.user.balance)}`);
+    els.balancePill.setAttribute('aria-label', `Gold balance ${formatMoney(state.user.balance)}`);
     applyBalanceTone(els.balancePill, state.user.balance);
     els.userName.hidden = false;
     els.userName.textContent = state.user.username;
@@ -779,6 +757,7 @@
     els.formSignup.hidden = (name !== 'signup');
     clearFeedback(els.loginFeedback);
     clearFeedback(els.signupFeedback);
+    updatePasswordMeter();
   }
 
   function switchMainTab(name) {
@@ -814,9 +793,13 @@
       showFeedback(els.signupFeedback, 'Username must be 3–32 characters: letters, numbers, dot, underscore, or hyphen.', 'error');
       return;
     }
-    const minPasswordLength = Number((state.runtimeConfig && state.runtimeConfig.minPasswordLength) || CONFIG.MIN_PASSWORD_LENGTH) || 6;
+    const minPasswordLength = getMinPasswordLength();
     if (password.length < minPasswordLength) {
       showFeedback(els.signupFeedback, `Password must be at least ${minPasswordLength} characters.`, 'error');
+      return;
+    }
+    if (state.runtimeConfig?.requireStrongPassword && !(/[a-z]/.test(password) && /[A-Z]/.test(password) && /\d/.test(password))) {
+      showFeedback(els.signupFeedback, 'Password must include lowercase, uppercase, and a number.', 'error');
       return;
     }
     if (password !== confirm) {
@@ -1041,7 +1024,7 @@
         if (lost) {
           joinBtn.disabled = true;
           joinBtn.textContent = 'You Lost';
-          joinBtn.title = 'You can view games, but you cannot play after reaching $0.';
+          joinBtn.title = 'You can view games, but you cannot play after reaching 0 Gold.';
         } else if (isOwn) {
           joinBtn.textContent = 'Cancel';
           joinBtn.classList.remove('btn-primary');
@@ -1159,7 +1142,7 @@
           if (isEliminated()) {
             cancelBtn.disabled = true;
             cancelBtn.textContent = 'Locked';
-            cancelBtn.title = 'You cannot cancel games after reaching $0.';
+            cancelBtn.title = 'You cannot cancel games after reaching 0 Gold.';
           } else {
             on(cancelBtn, 'click', () => handleCancelGame(g.id, cancelBtn));
           }
@@ -1309,6 +1292,7 @@
     els.resultBannerSub.appendChild(c);
 
     els.resultBanner.hidden = false;
+    notify(won ? `You won ${formatMoney(wager * 2)}!` : `You lost ${formatMoney(wager)}.`, won ? 'success' : 'error', { timeout: 7200 });
     els.resultBanner.setAttribute('role', 'status');
     if (state.bannerTimer) clearTimeout(state.bannerTimer);
     state.bannerTimer = setTimeout(hideResultBanner, 20000);
@@ -1404,11 +1388,11 @@
       return;
     }
 
-    // Confirm large wagers (>= 50% of balance and >= $100)
+    // Confirm large wagers (>= 50% of balance and >= 100 Gold)
     if (state.user && wager >= 100 && wager >= Math.floor(Number(state.user.balance) * 0.5)) {
       const ok = await confirmModal({
         title: 'Confirm wager',
-        body: `You're wagering ${formatMoney(wager)} — that's a big chunk of your balance. Continue?`,
+        body: `You're wagering ${formatMoney(wager)} — that's a big chunk of your gold balance. Continue?`,
         confirmText: 'Wager it',
         cancelText: 'Back',
         danger: false,
@@ -1603,10 +1587,6 @@
 
       els.flipSub.textContent = 'Tossing…';
 
-      // Sound effects: ticks during the spin, thud at the end.
-      startFlipTicks(dur);
-      setTimeout(() => { stopFlipTicks(); playLandSound(); }, dur - 30);
-
       setTimeout(resolve, dur + 30);
     });
   }
@@ -1690,11 +1670,11 @@
     // Auth forms
     on(els.formLogin, 'submit', handleLogin);
     on(els.formSignup, 'submit', handleSignup);
+    on(els.signupPassword, 'input', updatePasswordMeter);
     on(els.logoutBtn, 'click', handleLogout);
     on(els.lostSignout, 'click', handleLogout);
     on(els.themeToggle, 'click', toggleTheme);
     on(els.themeToggleAuth, 'click', toggleTheme);
-    on(els.soundToggle, 'click', toggleSfx);
 
     // Create
     on(els.formCreateGame, 'submit', handleCreateGame);
@@ -1769,7 +1749,6 @@
   async function boot() {
     captureElements();
     applyTheme(state.theme);
-    applySfxIcon();
     if (!assertRequiredElements()) {
       document.body.dataset.config = 'error';
       return;

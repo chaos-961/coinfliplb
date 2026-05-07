@@ -1,8 +1,8 @@
-# Coinflip LB (v0.9)
+# Coinflip Gold (v1.0)
 
-A clean, full-stack **fake-money** coinflip game. Players sign up, get $100 of play money, create heads/tails wagers, and watch a fair, server-decided coin flip animation. Pure-fun MVP — no real money, no crypto, no gambling integrations.
+A clean, full-stack **gold** coinflip game. Players sign up, get 100 Gold, create heads/tails wagers, and watch a fair, server-decided coin flip animation. Pure-fun MVP — no real money, no crypto, no gambling integrations.
 
-## What's new in v0.9
+## What's new in v1.0
 
 - Backend security hardening: `helmet` headers, real bcrypt timing-safe dummy hash, per-username login throttle, per-IP create-game throttle, password length cap, password length min/max validation, JWT no longer ships username in payload, JWT validated against fresh DB rows.
 - Wager and balance limits tightened: `MAX_WAGER` is now `1,000,000`, balances capped at `1,000,000,000` to keep the leaderboard stable.
@@ -12,7 +12,7 @@ A clean, full-stack **fake-money** coinflip game. Players sign up, get $100 of p
 - Public leaderboard (no auth required).
 - New `/api/config` endpoint so the frontend reflects backend limits without redeploys.
 - Composite indexes on `games(status, created_at)` and `games(status, wager)`.
-- Frontend: Web Audio sound effects (mute toggle in topbar), creator-side flip animation, in-app confirm modal (replaces native `confirm()`), confirmation prompts on big wagers, SVG icon buttons, avatar letter blobs.
+- Frontend: creator-side flip animation, in-app confirm modal (replaces native `confirm()`), confirmation prompts on big wagers, SVG icon buttons, avatar letter blobs.
 
 > **Action required for existing deployments:**
 > 1. Run `ALTER` migrations from `schema.sql` (or just re-run `init-db` — `CREATE INDEX IF NOT EXISTS` is idempotent).
@@ -23,9 +23,9 @@ A clean, full-stack **fake-money** coinflip game. Players sign up, get $100 of p
 
 ## 1. What this project is
 
-Coinflip LB is a tiny social game:
+Coinflip Gold is a tiny social game:
 
-1. You make an account → you start with $100 fake balance.
+1. You make an account → you start with 100 Gold starting balance.
 2. You create a game by picking heads or tails and a wager amount.
 3. Another player browses the open games and joins yours.
 4. The **server** flips the coin (cryptographically random — not the browser).
@@ -195,7 +195,7 @@ GitHub Pages can serve from a subfolder of your repo:
 2. Under **Build and deployment**, set **Source** to **Deploy from a branch**.
 3. Set **Branch** to `main` and the folder to `/frontend` (then **Save**).
 4. Wait ~1 minute. GitHub will give you a URL like `https://yourusername.github.io/coinflip-arena/`.
-5. Visit it. You should see the Coinflip LB landing page.
+5. Visit it. You should see the Coinflip Gold landing page.
 
 ## 15. How to set FRONTEND_ORIGIN in Railway
 
@@ -266,7 +266,7 @@ The backend value is what's actually given to new users. The frontend value is j
 `frontend/config.js` → `MIN_WAGER` and `MAX_WAGER`. The backend currently only enforces "wager > 0 and ≤ your balance" — these client-side limits are for UX. If you want the backend to enforce a max too, edit the validation in `backend/server.js` inside the `POST /api/games` handler.
 
 **App name**
-`frontend/config.js` → `APP_NAME: "Coinflip LB"`. Shown in the topbar and landing hero.
+`frontend/config.js` → `APP_NAME: "Coinflip Gold"`. Shown in the topbar and landing hero.
 
 **Polling interval**
 `frontend/config.js` → `POLLING_INTERVAL_MS: 3000` — how often the dashboard refreshes the open games list. Polling pauses when the tab isn't visible.

@@ -1,7 +1,7 @@
 window.CONFIG = Object.freeze({
   API_BASE_URL: "https://coinfliplb-production.up.railway.app",
 
-  APP_NAME: "Coinflip LB",
+  APP_NAME: "Coinflip Gold",
 
   // These are sensible client-side fallbacks. The frontend pulls the
   // authoritative values from /api/config at boot, so when the backend
@@ -21,9 +21,6 @@ window.CONFIG = Object.freeze({
   // The real "watcher" interval is shorter and lives in app.js.
   POLLING_INTERVAL_MS: 60000,
 
-  // Sound effects on by default; user can mute via the topbar toggle.
-  SFX_ENABLED_BY_DEFAULT: true,
-
   // App version surfaced in the footer.
-  APP_VERSION: "v0.9",
+  APP_VERSION: "v1.0",
 });
