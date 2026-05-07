@@ -43,7 +43,8 @@
       <div class="balance-pill" id="balance-pill" hidden aria-label="Gold balance">
         <span class="balance-value" id="balance-value">0 Gold</span>
       </div>
-      <span class="user-name" id="user-name" hidden></span>
+      <button type="button" class="user-name user-profile-btn" id="user-name" hidden title="View your stats" aria-label="View your stats"></button>
+      <span class="online-pill" id="online-pill" hidden title="Online players"><span class="online-dot"></span><span id="online-count">0 online</span></span>
       <button type="button" class="icon-btn" id="theme-toggle" aria-label="Switch to light mode" title="Toggle light mode">
         <svg id="theme-icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">
           <!-- Sun by default; JS swaps the path for the moon. -->
@@ -323,7 +324,7 @@
     </section>
   </main>
 
-  <footer class="app-footer" aria-label="Version">v1.0</footer>
+  <footer class="app-footer" aria-label="Version">v0.9.4</footer>
 
   <!-- =============================================================== -->
   <!-- FLIP MODAL -->
@@ -352,6 +353,31 @@
         <div class="result-row"><span class="result-key">Gold now</span><span class="result-val" id="result-balance">0 Gold</span></div>
         <button class="btn btn-primary btn-block btn-lg" id="flip-close-btn">Done</button>
       </div>
+    </div>
+  </div>
+
+
+  <!-- =============================================================== -->
+  <!-- PROFILE STATS MODAL -->
+  <!-- =============================================================== -->
+  <div class="modal-backdrop" id="profile-modal" hidden aria-hidden="true">
+    <div class="modal modal-sm profile-modal-card" role="dialog" aria-modal="true" aria-labelledby="profile-title">
+      <div class="profile-modal-head">
+        <div>
+          <p class="eyebrow">Player profile</p>
+          <h2 id="profile-title" class="flip-title">Your stats</h2>
+        </div>
+        <button type="button" class="icon-btn" id="profile-close" aria-label="Close profile">×</button>
+      </div>
+      <div class="profile-stats-grid" id="profile-stats-grid">
+        <div class="stat-card"><span>Balance</span><strong id="profile-balance">—</strong></div>
+        <div class="stat-card"><span>Account age</span><strong id="profile-age">—</strong></div>
+        <div class="stat-card"><span>Win streak</span><strong id="profile-streak">—</strong></div>
+        <div class="stat-card"><span>Max streak</span><strong id="profile-max-streak">—</strong></div>
+        <div class="stat-card"><span>Wins / losses</span><strong id="profile-record">—</strong></div>
+        <div class="stat-card"><span>Win ratio</span><strong id="profile-ratio">—</strong></div>
+      </div>
+      <p class="profile-note" id="profile-note">Stats update from completed games only.</p>
     </div>
   </div>
 
@@ -408,6 +434,10 @@
     <div class="row lb-row">
       <div class="lb-rank"></div>
       <div class="lb-name"></div>
+      <div class="lb-stats">
+        <span class="lb-record"></span>
+        <span class="lb-winrate"></span>
+      </div>
       <div class="lb-balance"></div>
     </div>
   </template>

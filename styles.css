@@ -2761,3 +2761,159 @@ body[data-view="dashboard"] .theme-toggle:not(.icon-btn) { display: none !import
 .password-meter[data-score="3"] .password-meter-text { color: var(--warn); }
 .password-meter[data-score="4"] .password-meter-text,
 .password-meter[data-score="5"] .password-meter-text { color: var(--good); }
+
+/* =====================================================================
+   v0.9.4 requested upgrades — profile stats, online count, leaderboard stats,
+   mobile polish, and calmer flip motion.
+   ===================================================================== */
+.user-profile-btn {
+  border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--bg-elev) 88%, transparent);
+  color: var(--text);
+  border-radius: 999px;
+  padding: 6px 11px;
+  font-weight: 750;
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  transition: transform 120ms ease, border-color 150ms ease, background 150ms ease;
+}
+.user-profile-btn:hover {
+  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--primary) 70%, var(--line));
+  background: color-mix(in srgb, var(--bg-elev-2) 92%, var(--primary) 8%);
+}
+.online-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--good) 45%, var(--line));
+  background: color-mix(in srgb, var(--good) 12%, transparent);
+  color: var(--text-dim);
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.online-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--good);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--good) 18%, transparent);
+}
+.profile-modal-card { max-width: 520px !important; }
+.profile-modal-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+.profile-modal-head .icon-btn {
+  font-size: 24px;
+  line-height: 1;
+}
+.eyebrow {
+  margin: 0 0 4px;
+  color: var(--text-mute);
+  font-size: 11px;
+  font-weight: 850;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+.profile-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.stat-card {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--bg-elev) 92%, transparent), color-mix(in srgb, var(--bg-elev-2) 86%, transparent));
+  padding: 13px;
+  min-width: 0;
+}
+.stat-card span {
+  display: block;
+  color: var(--text-mute);
+  font-size: 12px;
+  font-weight: 700;
+  margin-bottom: 5px;
+}
+.stat-card strong {
+  display: block;
+  color: var(--text);
+  font-size: clamp(16px, 4vw, 20px);
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+.profile-note {
+  margin: 12px 0 0;
+  color: var(--text-mute);
+  font-size: 12px;
+}
+.leaderboard-rows .lb-row {
+  grid-template-columns: 48px minmax(0, 1fr) minmax(110px, auto) auto !important;
+  gap: 12px;
+}
+.lb-stats {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+  color: var(--text-mute);
+  font-size: 12px;
+  font-weight: 750;
+  white-space: nowrap;
+}
+.lb-stats span {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 4px 8px;
+  background: color-mix(in srgb, var(--bg-elev-2) 72%, transparent);
+}
+.flip-modal-card,
+.flip-stage,
+.flip-coin,
+.flip-coin-inner {
+  will-change: transform;
+}
+.flip-coin.is-tossing .flip-coin-inner {
+  animation-timing-function: cubic-bezier(.14,.72,.18,1) !important;
+}
+@media (max-width: 760px) {
+  main { padding: 18px 12px 76px; }
+  .topbar {
+    align-items: stretch;
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 10px 12px;
+  }
+  .brand { min-width: 0; }
+  .brand-text { max-width: 44vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .topbar-right {
+    width: 100%;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .user-name { display: inline-flex !important; }
+  .online-pill { order: -1; }
+  .leaderboard-rows .lb-row {
+    grid-template-columns: 38px minmax(0, 1fr) auto !important;
+    grid-template-areas:
+      "rank name balance"
+      "rank stats stats";
+    align-items: center;
+  }
+  .lb-rank { grid-area: rank; width: 30px; height: 30px; }
+  .lb-name { grid-area: name; }
+  .lb-balance { grid-area: balance; min-width: 94px; }
+  .lb-stats { grid-area: stats; justify-content: flex-start; margin-top: -2px; }
+  .profile-stats-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 430px) {
+  .topbar-right { flex-wrap: wrap; justify-content: flex-start; }
+  .balance-pill, .user-profile-btn, .online-pill { font-size: 12px; padding: 6px 9px; }
+  .btn-sm { padding: 6px 9px; }
+}

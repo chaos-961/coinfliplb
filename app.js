@@ -1,5 +1,5 @@
 /* =====================================================================
-   Coinflip Gold — app.js (v1.0)
+   Coinflip Gold — app.js (v0.9.4)
    ---------------------------------------------------------------------
    Single-file SPA logic. No frameworks.
    - Inline feedback (no toast popups)
@@ -60,7 +60,9 @@
     pageSize:       { lobby: 20, my: 20, leaderboard: 20 },
     isFlipping:     false,
     pollTimer:      null,
+    presenceTimer:  null,
     pollTick:       0,
+    profileStats:   null,
     bannerTimer:    null,
     seenCompletedIds: null,
     pendingCreatedGameIds: null,
@@ -121,6 +123,8 @@
       balancePill:   $('#balance-pill'),
       balanceValue:  $('#balance-value'),
       userName:      $('#user-name'),
+      onlinePill:    $('#online-pill'),
+      onlineCount:   $('#online-count'),
       logoutBtn:     $('#logout-btn'),
       themeToggle:   $('#theme-toggle'),
       themeToggleAuth: $('#theme-toggle-auth'),
@@ -211,6 +215,17 @@
       resultAmount:  $('#result-amount'),
       resultBalance: $('#result-balance'),
       flipCloseBtn:  $('#flip-close-btn'),
+
+      profileModal: $('#profile-modal'),
+      profileTitle: $('#profile-title'),
+      profileClose: $('#profile-close'),
+      profileBalance: $('#profile-balance'),
+      profileAge: $('#profile-age'),
+      profileStreak: $('#profile-streak'),
+      profileMaxStreak: $('#profile-max-streak'),
+      profileRecord: $('#profile-record'),
+      profileRatio: $('#profile-ratio'),
+      profileNote: $('#profile-note'),
 
       confirmModal: $('#confirm-modal'),
       confirmTitle: $('#confirm-title'),
@@ -486,6 +501,20 @@
     const d = Math.floor(hr / 24);
     if (d < 30) return `${d}d ago`;
     return date.toLocaleDateString();
+  }
+  function formatAccountAge(dateInput) {
+    if (!dateInput) return '—';
+    const date = new Date(dateInput);
+    if (Number.isNaN(date.getTime())) return '—';
+    const days = Math.max(0, Math.floor((Date.now() - date.getTime()) / 86400000));
+    if (days === 0) return 'Created today';
+    if (days === 1) return '1 day old';
+    return `${days.toLocaleString('en-US')} days old`;
+  }
+  function formatPercent(value) {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return '0%';
+    return `${n.toFixed(n % 1 === 0 ? 0 : 1)}%`;
   }
   function capitalize(s) { return s ? s.charAt(0).toUpperCase() + s.slice(1) : s; }
   function compactMoney(value) {
@@ -788,6 +817,7 @@
     tokenStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(TOKEN_KEY);
     stopPolling();
+    stopPresence();
     updateTopbar();
   }
   function updateTopbar() {
@@ -796,6 +826,7 @@
       if (els.topbar) els.topbar.hidden = true;
       if (els.balancePill) els.balancePill.hidden = true;
       if (els.userName) els.userName.hidden = true;
+      if (els.onlinePill) els.onlinePill.hidden = true;
       if (els.logoutBtn) els.logoutBtn.hidden = true;
       updateWagerLimitUI();
       applyEliminatedState();
@@ -808,6 +839,7 @@
     applyBalanceTone(els.balancePill, state.user.balance);
     els.userName.hidden = false;
     els.userName.textContent = state.user.username;
+    if (els.onlinePill) els.onlinePill.hidden = false;
     els.logoutBtn.hidden = false;
     updateWagerLimitUI();
     applyEliminatedState();
@@ -971,8 +1003,10 @@
       refreshMe(),
       refreshMyGames({ skipCompletionDetection: true }),
       refreshCompletedNotifications({ initial: true }),
+      heartbeatPresence(),
     ]);
     startPolling();
+    startPresence();
   }
 
   async function refreshMe() {
@@ -1002,13 +1036,40 @@
       refreshMyGames({ silent: true, forNotification: true }).catch(() => {});
 
       if (state.activeMainTab === 'lobby') refreshOpenGames({ silent: true }).catch(() => {});
-      if (state.activeMainTab === 'leaderboard' && state.pollTick % 6 === 0) refreshLeaderboard({ silent: true }).catch(() => {});
+      if (state.activeMainTab === 'leaderboard' && state.pollTick % 4 === 0) refreshLeaderboard({ silent: true }).catch(() => {});
+      if (state.pollTick % 8 === 0) heartbeatPresence().catch(() => {});
       refreshMe().catch(() => {});
     }, Math.max(2500, Number(CONFIG.POLLING_INTERVAL_MS) || 4000));
   }
   function stopPolling() {
     if (state.pollTimer) clearInterval(state.pollTimer);
     state.pollTimer = null;
+  }
+
+  async function heartbeatPresence() {
+    if (!state.user || document.hidden) return;
+    try {
+      const data = await api('/api/presence/heartbeat', { method: 'POST' });
+      const n = Math.max(0, Number(data.online || 0));
+      if (els.onlineCount) els.onlineCount.textContent = `${n.toLocaleString('en-US')} online`;
+      if (els.onlinePill) els.onlinePill.hidden = false;
+    } catch (err) {
+      if (els.onlinePill) els.onlinePill.hidden = true;
+    }
+  }
+
+  function startPresence() {
+    stopPresence();
+    heartbeatPresence().catch(() => {});
+    state.presenceTimer = setInterval(() => {
+      if (!state.user || document.hidden) return;
+      heartbeatPresence().catch(() => {});
+    }, 45000);
+  }
+
+  function stopPresence() {
+    if (state.presenceTimer) clearInterval(state.presenceTimer);
+    state.presenceTimer = null;
   }
 
   async function refreshOwnOpenGamesCount() {
@@ -1384,7 +1445,6 @@
     if (navigator.vibrate) {
       try { navigator.vibrate(won ? [35, 40, 35] : [60]); } catch {}
     }
-    if (won) playWinSound(); else playLossSound();
   }
   function hideResultBanner() {
     if (state.bannerTimer) {
@@ -1435,7 +1495,12 @@
       $('.lb-rank', node).textContent    = u.rank;
       $('.lb-name', node).textContent    = u.username;
       const lbBalance = $('.lb-balance', node);
+      const lbRecord = $('.lb-record', node);
+      const lbWinrate = $('.lb-winrate', node);
+      const st = u.stats || {};
       lbBalance.textContent = formatMoney(u.balance);
+      if (lbRecord) lbRecord.textContent = `${Number(st.wins || 0)}W / ${Number(st.losses || 0)}L`;
+      if (lbWinrate) lbWinrate.textContent = `${formatPercent(st.win_rate || 0)} win`;
       applyBalanceTone(lbBalance, u.balance);
       if (u.rank === 1) node.classList.add('is-top1');
       else if (u.rank === 2) node.classList.add('is-top2');
@@ -1668,9 +1733,9 @@
       // Heads = even number of half-turns (lands face up).
       // Tails = odd number of half-turns.
       const finalX = (result === 'heads') ? '2160deg' : '2340deg';
-      // Fast readable vertical flip: about 1.5s of motion, then result.
-      const configuredDuration = Number(CONFIG.DEFAULT_FLIP_DURATION_MS) || 1500;
-      const dur = Math.min(Math.max(configuredDuration, 1350), 1650);
+      // Readable physical flip: not instant, not sluggish, and final face always matches server result.
+      const configuredDuration = Number(CONFIG.DEFAULT_FLIP_DURATION_MS) || 2200;
+      const dur = Math.min(Math.max(configuredDuration, 1900), 2600);
 
       inner.style.setProperty('--final-x', finalX);
       // Keep the legacy variable updated too so older fallback CSS never lands wrong.
@@ -1682,7 +1747,7 @@
       void coin.offsetWidth;
       coin.classList.add('is-tossing');
 
-      els.flipSub.textContent = 'Tossing…';
+      els.flipSub.textContent = 'Coin is in the air…';
 
       setTimeout(resolve, dur + 30);
     });
@@ -1716,7 +1781,6 @@
 
     els.flipResult.hidden = false;
 
-    if (won) playWinSound(); else playLossSound();
     if (navigator.vibrate) {
       try { navigator.vibrate(won ? [35, 40, 35] : [60]); } catch {}
     }
@@ -1751,6 +1815,43 @@
     stopFlipTicks();
   }
 
+  function renderProfileStats(payload) {
+    const user = payload?.user || state.user || {};
+    const stats = payload?.stats || {};
+    if (els.profileTitle) els.profileTitle.textContent = user.username || 'Your stats';
+    if (els.profileBalance) els.profileBalance.textContent = formatMoney(user.balance ?? state.user?.balance ?? 0);
+    if (els.profileAge) els.profileAge.textContent = formatAccountAge(user.created_at || state.user?.created_at);
+    if (els.profileStreak) els.profileStreak.textContent = `${Number(stats.current_win_streak || 0)} wins`;
+    if (els.profileMaxStreak) els.profileMaxStreak.textContent = `${Number(stats.max_win_streak || 0)} wins`;
+    if (els.profileRecord) els.profileRecord.textContent = `${Number(stats.wins || 0)}W / ${Number(stats.losses || 0)}L`;
+    if (els.profileRatio) els.profileRatio.textContent = `${formatPercent(stats.win_rate || 0)} win rate`;
+    if (els.profileNote) els.profileNote.textContent = `${Number(stats.games_played || 0).toLocaleString('en-US')} completed games counted.`;
+  }
+
+  async function openProfileModal() {
+    if (!state.user || !els.profileModal) return;
+    renderProfileStats({ user: state.user, stats: state.profileStats || {} });
+    els.profileModal.hidden = false;
+    els.profileModal.setAttribute('aria-hidden', 'false');
+    try {
+      const payload = await api('/api/me/stats');
+      state.profileStats = payload.stats;
+      if (payload.user) {
+        state.user = payload.user;
+        updateTopbar();
+      }
+      renderProfileStats(payload);
+    } catch (err) {
+      if (els.profileNote) els.profileNote.textContent = err.message || 'Could not refresh stats.';
+    }
+  }
+
+  function closeProfileModal() {
+    if (!els.profileModal) return;
+    els.profileModal.hidden = true;
+    els.profileModal.setAttribute('aria-hidden', 'true');
+  }
+
   // -------------------------------------------------------------------
   // Event wiring
   // -------------------------------------------------------------------
@@ -1769,6 +1870,7 @@
     on(els.formSignup, 'submit', handleSignup);
     on(els.signupPassword, 'input', updatePasswordMeter);
     on(els.logoutBtn, 'click', handleLogout);
+    on(els.userName, 'click', openProfileModal);
     on(els.lostSignout, 'click', handleLogout);
     on(els.themeToggle, 'click', toggleTheme);
     on(els.themeToggleAuth, 'click', toggleTheme);
@@ -1808,10 +1910,15 @@
     // Confirm modal
     on(els.confirmYes, 'click', () => closeConfirmModal(true));
     on(els.confirmNo,  'click', () => closeConfirmModal(false));
+    on(els.profileClose, 'click', closeProfileModal);
+    on(els.profileModal, 'click', (e) => {
+      if (e.target === els.profileModal) closeProfileModal();
+    });
     on(els.confirmModal, 'click', (e) => {
       if (e.target === els.confirmModal) closeConfirmModal(false);
     });
     on(document, 'keydown', (e) => {
+      if (e.key === 'Escape' && els.profileModal && !els.profileModal.hidden) closeProfileModal();
       if (e.key === 'Escape' && !els.confirmModal.hidden) closeConfirmModal(false);
     });
 
@@ -1836,6 +1943,7 @@
       refreshMe().catch(() => {});
       refreshMyGames({ forNotification: true, silent: true }).catch(() => {});
       refreshOpenGames({ silent: true }).catch(() => {});
+      heartbeatPresence().catch(() => {});
       if (state.activeMainTab === 'leaderboard') refreshLeaderboard({ silent: true }).catch(() => {});
     });
   }

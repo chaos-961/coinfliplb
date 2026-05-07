@@ -19,6 +19,8 @@
 //   GET  /api/games/:id         fetch one game's details
 //   GET  /api/me/games          list current user's games
 //   GET  /api/leaderboard       top users sorted by balance (public)
+//   GET  /api/me/stats          current player computed stats
+//   POST /api/presence/heartbeat online player heartbeat
 //   GET  /api/config            client-side runtime config
 //   GET  /health                liveness check (pings DB)
 // =====================================================================
@@ -130,6 +132,8 @@ const inFlightByIp = new Map();
 const cooldowns = new Map();
 const joinLocks = new Set();
 const responseCache = new Map();
+const onlineUsers = new Map();
+const ONLINE_WINDOW_MS = parseInt(process.env.ONLINE_WINDOW_MS || '90000', 10);
 
 function clientIp(req) {
   return req.ip || req.headers['x-forwarded-for'] || req.socket?.remoteAddress || 'unknown';
@@ -161,6 +165,20 @@ function setCachedJson(key, value, ttlMs) {
 function clearResponseCache() {
   responseCache.clear();
 }
+function pruneOnlineUsers(now = Date.now()) {
+  for (const [userId, seenAt] of onlineUsers.entries()) {
+    if (now - seenAt > ONLINE_WINDOW_MS) onlineUsers.delete(userId);
+  }
+}
+
+function touchOnlineUser(userId) {
+  if (!userId) return 0;
+  const now = Date.now();
+  onlineUsers.set(Number(userId), now);
+  pruneOnlineUsers(now);
+  return onlineUsers.size;
+}
+
 
 function requireCooldown(label, ms) {
   return (req, res, next) => {
@@ -373,6 +391,65 @@ function publicGame(row) {
   };
 }
 
+function publicStats(row) {
+  const wins = Number(row.wins || 0);
+  const losses = Number(row.losses || 0);
+  const gamesPlayed = Number(row.games_played || wins + losses || 0);
+  return {
+    games_played: gamesPlayed,
+    wins,
+    losses,
+    win_rate: gamesPlayed > 0 ? Math.round((wins / gamesPlayed) * 1000) / 10 : 0,
+    current_win_streak: Number(row.current_win_streak || 0),
+    max_win_streak: Number(row.max_win_streak || 0),
+  };
+}
+
+async function getPlayerStats(userId) {
+  const userRes = await db.query(
+    'SELECT id, username, balance, created_at FROM users WHERE id = $1',
+    [userId]
+  );
+  if (userRes.rowCount === 0) return null;
+
+  const aggregateRes = await db.query(
+    `SELECT
+        COUNT(*)::int AS games_played,
+        COUNT(*) FILTER (WHERE winner_id = $1)::int AS wins,
+        COUNT(*) FILTER (WHERE winner_id <> $1)::int AS losses
+       FROM games
+      WHERE status = 'completed' AND (creator_id = $1 OR joiner_id = $1)`,
+    [userId]
+  );
+
+  const historyRes = await db.query(
+    `SELECT winner_id
+       FROM games
+      WHERE status = 'completed' AND (creator_id = $1 OR joiner_id = $1)
+      ORDER BY completed_at ASC, id ASC`,
+    [userId]
+  );
+
+  let current = 0;
+  let max = 0;
+  for (const row of historyRes.rows) {
+    if (Number(row.winner_id) === Number(userId)) {
+      current += 1;
+      if (current > max) max = current;
+    } else {
+      current = 0;
+    }
+  }
+
+  const stats = {
+    ...aggregateRes.rows[0],
+    current_win_streak: current,
+    max_win_streak: max,
+  };
+
+  return { user: publicUser(userRes.rows[0]), stats: publicStats(stats) };
+}
+
 /**
  * Cryptographically secure 50/50 coin flip.
  * 256 is divisible by 2 so reading the lowest bit of one random byte
@@ -563,6 +640,22 @@ app.get('/api/me', requireAuth, async (req, res) => {
     console.error('[me]', err);
     return res.status(500).json({ error: 'Could not load your profile.' });
   }
+});
+
+app.get('/api/me/stats', requireAuth, async (req, res) => {
+  try {
+    const payload = await getPlayerStats(req.user.id);
+    if (!payload) return res.status(404).json({ error: 'Account no longer exists.' });
+    return res.json(payload);
+  } catch (err) {
+    console.error('[me stats]', err);
+    return res.status(500).json({ error: 'Could not load your stats.' });
+  }
+});
+
+app.post('/api/presence/heartbeat', requireAuth, (req, res) => {
+  const online = touchOnlineUser(req.user.id);
+  res.json({ online });
 });
 
 // ----- POST /api/games (create) --------------------------------------
@@ -1011,16 +1104,33 @@ app.get('/api/leaderboard', async (req, res) => {
     const offset = (safePage - 1) * limit;
 
     const result = await db.query(
-      `SELECT id, username, balance, created_at
-         FROM users
-        ORDER BY balance DESC, created_at ASC
-        LIMIT $1 OFFSET $2`,
-      [limit, offset]
+      `WITH ranked AS (
+         SELECT id, username, balance, created_at,
+                ROW_NUMBER() OVER (ORDER BY balance DESC, created_at ASC) AS rank
+           FROM users
+          ORDER BY balance DESC, created_at ASC
+          LIMIT 100
+       ), paged AS (
+         SELECT * FROM ranked
+          WHERE rank > $1 AND rank <= $2
+       )
+       SELECT p.id, p.username, p.balance, p.created_at, p.rank,
+              COUNT(g.id) FILTER (WHERE g.status = 'completed')::int AS games_played,
+              COUNT(g.id) FILTER (WHERE g.status = 'completed' AND g.winner_id = p.id)::int AS wins,
+              COUNT(g.id) FILTER (WHERE g.status = 'completed' AND g.winner_id <> p.id)::int AS losses
+         FROM paged p
+         LEFT JOIN games g
+           ON g.status = 'completed'
+          AND (g.creator_id = p.id OR g.joiner_id = p.id)
+        GROUP BY p.id, p.username, p.balance, p.created_at, p.rank
+        ORDER BY p.rank ASC`,
+      [offset, offset + limit]
     );
     const payload = {
-      users: result.rows.map((r, i) => ({
-        rank: offset + i + 1,
+      users: result.rows.map((r) => ({
+        rank: Number(r.rank),
         ...publicUser(r),
+        stats: publicStats(r),
       })),
       page: safePage,
       limit,
