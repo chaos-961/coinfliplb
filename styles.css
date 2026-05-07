@@ -1777,3 +1777,277 @@ body.is-eliminated .topbar .balance-pill {
   .coin-xl { width: 166px; height: 166px; }
   .coin-xl .coin-face { font-size: 72px; }
 }
+
+/* =====================================================================
+   v0.10 requested fixes: clean balance, no wager hint, required choice,
+   stronger creator result popup, and rebuilt premium 3D flip.
+   ===================================================================== */
+
+/* Topbar balance: show money only, no BALANCE label. */
+.balance-pill {
+  gap: 0;
+  padding: 7px 13px;
+  min-width: 76px;
+  justify-content: center;
+  font-size: 15px;
+  letter-spacing: -0.01em;
+}
+.balance-pill .balance-label {
+  display: none !important;
+}
+.balance-pill .balance-value {
+  line-height: 1;
+  font-weight: 850;
+}
+
+/* WAGER area: leave only the input field and Create game button visible. */
+.wager-field {
+  margin-bottom: 0;
+}
+.wager-field .field-hint,
+#wager-hint {
+  display: none !important;
+}
+.create-form {
+  display: grid !important;
+  gap: 14px;
+}
+.choice-row {
+  margin-bottom: 0;
+}
+.choice-card {
+  min-height: 72px;
+  display: flex;
+  align-items: center;
+  border-color: color-mix(in srgb, var(--line) 84%, transparent);
+}
+.choice-card:hover {
+  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--primary) 44%, var(--line-2));
+}
+.choice-card:has(input:focus-visible) {
+  outline: 3px solid rgba(139, 92, 246, 0.22);
+  outline-offset: 2px;
+}
+.choice-card:has(input:checked) {
+  border-color: color-mix(in srgb, var(--primary) 72%, #ffffff 8%);
+  background:
+    radial-gradient(circle at 20% 50%, color-mix(in srgb, var(--primary) 18%, transparent), transparent 46%),
+    color-mix(in srgb, var(--bg-elev-2) 88%, var(--primary) 12%);
+  box-shadow: var(--shadow-sm), 0 0 0 1px rgba(139, 92, 246, 0.36);
+}
+.choice-card:not(:has(input:checked)) .choice-content {
+  opacity: 0.86;
+}
+.prefix-input input::placeholder {
+  color: color-mix(in srgb, var(--text-mute) 86%, transparent);
+}
+
+/* Result banner behaves like a real popup for the creator when a game completes. */
+.result-banner {
+  top: calc(env(safe-area-inset-top, 0px) + 16px);
+  width: min(600px, calc(100vw - 24px));
+  padding: 15px 15px 15px 16px;
+  border-radius: 20px;
+  backdrop-filter: blur(18px) saturate(1.08);
+  -webkit-backdrop-filter: blur(18px) saturate(1.08);
+  box-shadow: 0 24px 70px -24px rgba(0,0,0,.72), 0 8px 24px -16px rgba(0,0,0,.45);
+}
+.result-banner-title {
+  font-size: 16px;
+  line-height: 1.25;
+}
+.result-banner-sub {
+  line-height: 1.35;
+}
+.result-banner.is-win .result-banner-coin {
+  background: radial-gradient(circle at 34% 26%, #fff7c2 0 10%, #fbbf24 42%, #16a34a 100%);
+}
+.result-banner.is-loss .result-banner-coin {
+  background: radial-gradient(circle at 34% 26%, #fee2e2 0 10%, #fb7185 44%, #991b1b 100%);
+}
+
+/* Premium coin model: thicker rim, no visible gap between faces, smoother motion. */
+.coin {
+  --coin-depth: 5px;
+  --coin-rim: #b77908;
+  --coin-rim-dark: #754d08;
+  perspective: 1600px;
+  overflow: visible;
+  contain: none;
+}
+.coin-xs { --coin-depth: 2px; }
+.coin-sm { --coin-depth: 3px; }
+.coin-md { --coin-depth: 5px; }
+.coin-xl { --coin-depth: 11px; }
+.coin-inner {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  transform-style: preserve-3d;
+  transform-origin: 50% 50%;
+  will-change: transform;
+  transition: transform 260ms ease;
+  filter: drop-shadow(0 14px 24px rgba(0,0,0,.22));
+}
+.coin-inner::before {
+  content: "";
+  position: absolute;
+  inset: 4.5%;
+  border-radius: 50%;
+  transform: translateZ(calc(var(--coin-depth) * -1));
+  background:
+    repeating-conic-gradient(from -8deg,
+      rgba(255,255,255,.28) 0deg 5deg,
+      rgba(117,77,8,.34) 5deg 10deg),
+    radial-gradient(circle at 50% 50%, #f2b82e 0 48%, var(--coin-rim) 72%, var(--coin-rim-dark) 100%);
+  box-shadow:
+    0 0 0 var(--coin-depth) var(--coin-rim),
+    inset 0 0 18px rgba(0,0,0,.26),
+    inset 0 0 0 2px rgba(255,255,255,.12);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  pointer-events: none;
+}
+.coin::after {
+  display: none;
+}
+.coin-face {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  overflow: hidden;
+  clip-path: circle(50% at 50% 50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transform: translateZ(var(--coin-depth));
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  border: max(2px, calc(var(--coin-depth) * .62)) solid rgba(255,255,255,.17);
+  box-shadow:
+    inset 0 12px 20px rgba(255,255,255,.20),
+    inset 0 -16px 24px rgba(0,0,0,.30),
+    inset 0 0 0 2px rgba(255,255,255,.10);
+}
+.coin-tails {
+  transform: rotateY(180deg) translateZ(var(--coin-depth));
+}
+.coin-heads {
+  color: #5a3500;
+  background:
+    radial-gradient(circle at 30% 22%, rgba(255,255,255,.92) 0 9%, transparent 10%),
+    radial-gradient(circle at 48% 46%, #ffe695 0 34%, #f7b91f 55%, #a96707 100%);
+}
+.coin-tails {
+  color: #243044;
+  background:
+    radial-gradient(circle at 30% 22%, rgba(255,255,255,.95) 0 9%, transparent 10%),
+    radial-gradient(circle at 48% 46%, #ffffff 0 32%, #d8dee9 55%, #64748b 100%);
+}
+.coin-face::before {
+  inset: 14%;
+  border-width: max(1px, calc(var(--coin-depth) * .22));
+  opacity: .8;
+}
+.coin-face::after {
+  inset: 28%;
+  opacity: .8;
+}
+.coin-face span {
+  position: relative;
+  z-index: 2;
+  transform: translateZ(calc(var(--coin-depth) + 1px));
+  text-shadow: 0 2px 0 rgba(255,255,255,.24), 0 -1px 0 rgba(0,0,0,.18);
+}
+.coin-flipped-base .coin-inner,
+.coin.coin-flipped-base .coin-inner {
+  transform: rotateY(180deg);
+}
+
+.modal {
+  max-width: 560px;
+}
+.flip-stage {
+  min-height: clamp(280px, 45vh, 380px);
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  perspective: 1700px;
+  isolation: isolate;
+  border: 1px solid color-mix(in srgb, var(--primary) 20%, transparent);
+  background:
+    radial-gradient(circle at 50% 52%, color-mix(in srgb, var(--primary) 15%, transparent) 0%, transparent 48%),
+    radial-gradient(ellipse at 50% 84%, rgba(0,0,0,.34), transparent 46%);
+}
+.coin-xl {
+  width: clamp(184px, 30vw, 232px);
+  height: clamp(184px, 30vw, 232px);
+}
+.coin-xl .coin-face {
+  font-size: clamp(78px, 11vw, 102px);
+}
+.coin-xl .coin-shadow {
+  bottom: -30px;
+  width: 72%;
+  height: 22px;
+  filter: blur(7px);
+  opacity: .46;
+  will-change: transform, opacity;
+}
+.coin.is-waiting .coin-inner {
+  animation: coin-ready-premium 1800ms ease-in-out infinite;
+}
+@keyframes coin-ready-premium {
+  0%, 100% { transform: translate3d(0,0,0) rotateX(10deg) rotateY(-18deg) rotateZ(-2deg); }
+  50%      { transform: translate3d(0,-9px,0) rotateX(-8deg) rotateY(20deg) rotateZ(2deg); }
+}
+.coin.is-tossing .coin-inner {
+  animation: coin-flip-premium var(--toss-duration, 4200ms) cubic-bezier(.17,.78,.16,1) forwards;
+}
+@keyframes coin-flip-premium {
+  0%   { transform: translate3d(0, 0, 0) rotateX(10deg) rotateY(0deg) rotateZ(0deg) scale(1); }
+  10%  { transform: translate3d(-8px, -30px, 0) rotateX(240deg) rotateY(420deg) rotateZ(-5deg) scale(1.035); }
+  24%  { transform: translate3d(10px, -78px, 0) rotateX(620deg) rotateY(980deg) rotateZ(5deg) scale(1.065); }
+  42%  { transform: translate3d(-7px, -102px, 0) rotateX(1040deg) rotateY(1540deg) rotateZ(-4deg) scale(1.075); }
+  60%  { transform: translate3d(7px, -78px, 0) rotateX(1420deg) rotateY(2050deg) rotateZ(3deg) scale(1.055); }
+  76%  { transform: translate3d(-3px, -30px, 0) rotateX(1700deg) rotateY(calc(var(--final-y, 2880deg) - 230deg)) rotateZ(-1deg) scale(1.025); }
+  88%  { transform: translate3d(0, 0, 0) rotateX(1800deg) rotateY(calc(var(--final-y, 2880deg) - 18deg)) rotateZ(0deg) scale(1.055, .94); }
+  94%  { transform: translate3d(0, -8px, 0) rotateX(1800deg) rotateY(calc(var(--final-y, 2880deg) + 7deg)) rotateZ(0deg) scale(.985, 1.035); }
+  100% { transform: translate3d(0, 0, 0) rotateX(1800deg) rotateY(var(--final-y, 2880deg)) rotateZ(0deg) scale(1); }
+}
+.coin-xl.is-tossing .coin-shadow {
+  animation: coin-shadow-premium var(--toss-duration, 4200ms) cubic-bezier(.17,.78,.16,1) forwards;
+}
+@keyframes coin-shadow-premium {
+  0%, 100% { transform: translateX(-50%) scaleX(1); opacity: .44; }
+  24%      { transform: translateX(-50%) scaleX(.58); opacity: .22; }
+  42%      { transform: translateX(-50%) scaleX(.34); opacity: .13; }
+  70%      { transform: translateX(-50%) scaleX(.70); opacity: .27; }
+  88%      { transform: translateX(-50%) scaleX(.92); opacity: .38; }
+}
+
+@media (max-width: 720px) {
+  .topbar-right { gap: 8px; }
+  .balance-pill { min-width: 68px; padding-inline: 11px; }
+  .modal { max-width: min(100%, 520px); }
+  .flip-stage { min-height: clamp(250px, 42vh, 330px); }
+  .coin-xl { width: clamp(160px, 54vw, 210px); height: clamp(160px, 54vw, 210px); }
+  .coin-xl .coin-face { font-size: clamp(68px, 23vw, 92px); }
+}
+@media (max-height: 680px) {
+  .flip-stage { min-height: 232px; }
+  .coin-xl { width: 162px; height: 162px; }
+  .coin-xl .coin-face { font-size: 70px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .coin.is-waiting .coin-inner,
+  .coin.is-tossing .coin-inner,
+  .coin-xl.is-tossing .coin-shadow {
+    animation: none !important;
+  }
+  .coin.is-tossing .coin-inner {
+    transform: rotateY(var(--final-y, 2880deg));
+    transition: transform 700ms ease-out;
+  }
+}

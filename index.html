@@ -41,8 +41,7 @@
       <span class="brand-text" id="brand-name">Coinflip LB</span>
     </a>
     <div class="topbar-right">
-      <div class="balance-pill" id="balance-pill" hidden>
-        <span class="balance-label">Balance</span>
+      <div class="balance-pill" id="balance-pill" hidden aria-label="Money">
         <span class="balance-value" id="balance-value">$0.00</span>
       </div>
       <span class="user-name" id="user-name" hidden></span>
@@ -168,7 +167,7 @@
         <div class="lost-coin" aria-hidden="true">$0</div>
         <div class="lost-copy">
           <h2>You Lost!</h2>
-          <p>Your balance reached $0. You can still view open games, your games, and the leaderboard, but game actions are locked.</p>
+          <p>You reached $0. You can still view open games, your games, and the leaderboard, but game actions are locked.</p>
         </div>
         <button type="button" class="btn btn-primary btn-sm" id="lost-signout">Sign out</button>
       </div>
@@ -183,7 +182,7 @@
         <form class="create-form" id="form-create-game" novalidate>
           <div class="choice-row" role="radiogroup" aria-label="Pick heads or tails">
             <label class="choice-card">
-              <input type="radio" name="choice" value="heads" checked />
+              <input type="radio" name="choice" value="heads" />
               <div class="choice-content">
                 <div class="coin coin-sm">
                   <div class="coin-inner">
@@ -220,11 +219,11 @@
                 pattern="[0-9]*"
                 min="1"
                 step="1"
-                placeholder="1 - your balance"
+                placeholder="1 - max"
                 required
               />
             </div>
-            <span class="field-hint" id="wager-hint">1 - your balance</span>
+            <span class="field-hint" id="wager-hint" hidden></span>
           </label>
 
           <button type="submit" class="btn btn-primary btn-lg" id="create-btn">Create game</button>
@@ -299,7 +298,7 @@
       <!-- Tab panel: leaderboard -->
       <div class="tab-panel" id="panel-leaderboard" role="tabpanel" hidden>
         <div class="panel-toolbar">
-          <div class="panel-info">Top 100 players by balance. Showing 20 per page.</div>
+          <div class="panel-info">Top 100 players by money. Showing 20 per page.</div>
           <button type="button" class="btn btn-ghost btn-sm" id="refresh-lb" aria-label="Refresh">↻ Refresh</button>
         </div>
         <div class="rows leaderboard-rows" id="lb-rows"></div>
@@ -340,7 +339,7 @@
         <div class="result-row"><span class="result-key">Your pick</span><span class="result-val" id="result-pick">—</span></div>
         <div class="result-row"><span class="result-key">Outcome</span><span class="result-val" id="result-outcome">—</span></div>
         <div class="result-row"><span class="result-key">Amount</span><span class="result-val" id="result-amount">$0</span></div>
-        <div class="result-row"><span class="result-key">New balance</span><span class="result-val" id="result-balance">$0</span></div>
+        <div class="result-row"><span class="result-key">Money now</span><span class="result-val" id="result-balance">$0</span></div>
         <button class="btn btn-primary btn-block btn-lg" id="flip-close-btn">Done</button>
       </div>
     </div>

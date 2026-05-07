@@ -487,21 +487,23 @@
     const lost = isEliminated();
     const unavailable = max < min;
 
+    // The UI should stay clean under WAGER: input + button only.
+    if (els.wagerHint) {
+      els.wagerHint.textContent = '';
+      els.wagerHint.hidden = true;
+    }
+
     els.wagerInput.min = String(min);
     els.wagerInput.max = max >= min ? String(max) : String(min);
 
     if (max >= min) {
       els.wagerInput.placeholder = `${compactMoney(min)} - ${compactMoney(max)}`;
-      if (els.wagerHint) els.wagerHint.textContent = `Allowed: ${compactMoney(min)} - ${compactMoney(max)}`;
     } else if (lost) {
       els.wagerInput.placeholder = 'You Lost!';
-      if (els.wagerHint) els.wagerHint.textContent = 'You Lost!';
     } else if (hasOwnOpenGames()) {
-      els.wagerInput.placeholder = 'Balance reserved';
-      if (els.wagerHint) els.wagerHint.textContent = 'Your balance is reserved in an open game. Cancel it or wait for an opponent.';
+      els.wagerInput.placeholder = 'Money reserved';
     } else {
-      els.wagerInput.placeholder = 'No balance available';
-      if (els.wagerHint) els.wagerHint.textContent = 'No balance available.';
+      els.wagerInput.placeholder = 'No money available';
     }
 
     // Do not allow creating a new game with $0 available balance, but do not
@@ -550,6 +552,7 @@
     els.topbar.hidden = false;
     els.balancePill.hidden = false;
     els.balanceValue.textContent = formatMoney(state.user.balance);
+    els.balancePill.setAttribute('aria-label', `Money ${formatMoney(state.user.balance)}`);
     applyBalanceTone(els.balancePill, state.user.balance);
     els.userName.hidden = false;
     els.userName.textContent = state.user.username;
@@ -889,10 +892,10 @@
       const data = await api(`/api/me/games?page=${page}&limit=${limit}`);
       const games = data.games || [];
       const meta = normalizeMeta(data, games, page, limit);
-      if (options.forOpenCount || page === 1) {
-        const openOnPage = games.filter(g => g.status === 'open').length;
-        // When this request is explicitly status=open, total is the open-game count.
-        state.ownOpenGamesCount = options.forOpenCount ? meta.total : openOnPage;
+      if (options.forOpenCount) {
+        // Only a status=open request has a reliable total for open games.
+        // A mixed first page can miss older open games and falsely lock a user.
+        state.ownOpenGamesCount = meta.total;
         updateWagerLimitUI();
         applyEliminatedState();
       }
@@ -1026,6 +1029,7 @@
     if (fresh) {
       showResultBanner(fresh);
       refreshMe().catch(() => {});
+      refreshOwnOpenGamesCount().then(() => { updateWagerLimitUI(); applyEliminatedState(); }).catch(() => {});
       refreshLeaderboard().catch(() => {});
     }
 
@@ -1194,6 +1198,7 @@
         updateTopbar();
       }
       els.wagerInput.value = '';
+      els.formCreateGame.querySelectorAll('input[name="choice"]').forEach(input => { input.checked = false; });
       updateWagerLimitUI();
       showFeedback(els.createFeedback, 'Game created. Waiting for an opponent…', 'success');
       // Refresh open games and the user's games immediately
@@ -1204,6 +1209,7 @@
       showFeedback(els.createFeedback, err.message, 'error');
     } finally {
       setLoading(els.createBtn, false);
+      updateWagerLimitUI();
     }
   }
 
@@ -1296,8 +1302,9 @@
       // Heads = even number of half-turns (lands face up).
       // Tails = odd number of half-turns. Multiply by 360 for a clean
       // multi-rotation finish, then add 180 for tails.
-      const finalY = (result === 'heads') ? '2160deg' : '2340deg';
-      const dur    = Math.min(Number(CONFIG.DEFAULT_FLIP_DURATION_MS) || 2600, 2800);
+      const finalY = (result === 'heads') ? '2880deg' : '3060deg';
+      const configuredDuration = Number(CONFIG.DEFAULT_FLIP_DURATION_MS) || 4200;
+      const dur = Math.min(Math.max(configuredDuration, 3400), 5200);
 
       inner.style.setProperty('--final-y', finalY);
       inner.style.setProperty('--toss-duration', `${dur}ms`);
