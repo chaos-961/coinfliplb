@@ -15,8 +15,6 @@
 </head>
 <body data-config="loading" data-theme="dark">
 
-  <button type="button" class="theme-toggle" id="theme-toggle" aria-label="Switch to light mode" title="Toggle light mode">☀</button>
-
   <!-- Decorative background. All purely visual — non-interactive. -->
   <div class="bg-deco" aria-hidden="true">
     <div class="bg-orb orb-a"></div>
@@ -45,9 +43,31 @@
         <span class="balance-value" id="balance-value">$0.00</span>
       </div>
       <span class="user-name" id="user-name" hidden></span>
+      <button type="button" class="icon-btn" id="sound-toggle" aria-label="Mute sounds" title="Mute sounds">
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">
+          <path id="sound-icon-path" d="M11 5L6 9H3v6h3l5 4V5zm5.5 7a4.5 4.5 0 0 0-2.5-4v8a4.5 4.5 0 0 0 2.5-4z" fill="currentColor"/>
+        </svg>
+      </button>
+      <button type="button" class="icon-btn" id="theme-toggle" aria-label="Switch to light mode" title="Toggle light mode">
+        <svg id="theme-icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">
+          <!-- Sun by default; JS swaps the path for the moon. -->
+          <path id="theme-icon-path"
+                d="M12 4V2m0 20v-2m8-8h2M2 12h2m13.66-5.66l1.42-1.42M4.93 19.07l1.41-1.41m0-11.32L4.93 4.93m14.14 14.14l-1.42-1.42M12 7a5 5 0 1 0 0 10 5 5 0 0 0 0-10z"
+                fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
       <button class="btn btn-ghost btn-sm" id="logout-btn" hidden>Sign out</button>
     </div>
   </header>
+
+  <!-- Sign-in screen also gets a theme toggle (no topbar there) -->
+  <button type="button" class="icon-btn floating-toggle" id="theme-toggle-auth" aria-label="Switch to light mode" title="Toggle light mode">
+    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">
+      <path id="theme-icon-path-auth"
+            d="M12 4V2m0 20v-2m8-8h2M2 12h2m13.66-5.66l1.42-1.42M4.93 19.07l1.41-1.41m0-11.32L4.93 4.93m14.14 14.14l-1.42-1.42M12 7a5 5 0 1 0 0 10 5 5 0 0 0 0-10z"
+            fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+  </button>
 
   <main>
     <!-- ============================================================ -->
@@ -56,7 +76,12 @@
     <section class="view view-auth" id="view-auth">
       <div class="auth-card">
         <div class="auth-coin-deco" aria-hidden="true">
-          <div class="static-coin static-coin-md static-coin-heads"><span>H</span></div>
+          <div class="coin coin-md idle-spin">
+            <div class="coin-inner">
+              <div class="coin-face coin-heads"><span>H</span></div>
+              <div class="coin-face coin-tails"><span>T</span></div>
+            </div>
+          </div>
         </div>
 
         <h1 class="auth-title">Coinflip LB</h1>
@@ -149,7 +174,7 @@
 
       <!-- Result banner: shows when one of the user's open games has just been joined -->
       <div class="result-banner" id="result-banner" hidden role="status" aria-live="polite">
-        <div class="static-coin static-coin-sm result-banner-coin" id="result-banner-coin" aria-hidden="true"><span>H</span></div>
+        <div class="result-banner-coin" id="result-banner-coin" aria-hidden="true"></div>
         <div class="result-banner-text">
           <div class="result-banner-title" id="result-banner-title">—</div>
           <div class="result-banner-sub" id="result-banner-sub">—</div>
@@ -179,14 +204,24 @@
             <label class="choice-card">
               <input type="radio" name="choice" value="heads" />
               <div class="choice-content">
-                <div class="static-coin static-coin-choice static-coin-heads" aria-hidden="true"><span>H</span></div>
+                <div class="coin coin-sm">
+                  <div class="coin-inner">
+                    <div class="coin-face coin-heads"><span>H</span></div>
+                    <div class="coin-face coin-tails"><span>T</span></div>
+                  </div>
+                </div>
                 <span class="choice-label">Heads</span>
               </div>
             </label>
             <label class="choice-card">
               <input type="radio" name="choice" value="tails" />
               <div class="choice-content">
-                <div class="static-coin static-coin-choice static-coin-tails" aria-hidden="true"><span>T</span></div>
+                <div class="coin coin-sm coin-flipped-base">
+                  <div class="coin-inner">
+                    <div class="coin-face coin-heads"><span>H</span></div>
+                    <div class="coin-face coin-tails"><span>T</span></div>
+                  </div>
+                </div>
                 <span class="choice-label">Tails</span>
               </div>
             </label>
@@ -298,7 +333,7 @@
     </section>
   </main>
 
-  <footer class="app-footer" aria-label="Version">v0.8</footer>
+  <footer class="app-footer" aria-label="Version">v0.9</footer>
 
   <!-- =============================================================== -->
   <!-- FLIP MODAL -->
@@ -308,12 +343,12 @@
       <h2 id="flip-title" class="flip-title">Flipping the coin…</h2>
 
       <div class="flip-stage">
-        <div class="flip-coin" id="flip-coin" aria-hidden="true">
-          <div class="flip-coin-inner" id="flip-coin-inner">
-            <div class="flip-face flip-face-heads"><span>H</span></div>
-            <div class="flip-face flip-face-tails"><span>T</span></div>
+        <div class="coin coin-xl" id="flip-coin" aria-hidden="true">
+          <div class="coin-inner" id="flip-coin-inner">
+            <div class="coin-face coin-heads"><span>H</span></div>
+            <div class="coin-face coin-tails"><span>T</span></div>
           </div>
-          <div class="flip-coin-shadow"></div>
+          <div class="coin-shadow"></div>
         </div>
       </div>
 
@@ -326,6 +361,20 @@
         <div class="result-row"><span class="result-key">Amount</span><span class="result-val" id="result-amount">$0</span></div>
         <div class="result-row"><span class="result-key">Money now</span><span class="result-val" id="result-balance">$0</span></div>
         <button class="btn btn-primary btn-block btn-lg" id="flip-close-btn">Done</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- =============================================================== -->
+  <!-- CONFIRM MODAL (replaces native confirm() for Cancel game) -->
+  <!-- =============================================================== -->
+  <div class="modal-backdrop" id="confirm-modal" hidden aria-hidden="true">
+    <div class="modal modal-sm" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
+      <h2 id="confirm-title" class="flip-title">Cancel game?</h2>
+      <p class="confirm-body" id="confirm-body">Cancel this open game and refund the wager?</p>
+      <div class="confirm-actions">
+        <button type="button" class="btn btn-ghost btn-lg" id="confirm-no">Keep game</button>
+        <button type="button" class="btn btn-danger btn-lg" id="confirm-yes">Cancel game</button>
       </div>
     </div>
   </div>
@@ -345,7 +394,12 @@
         </div>
       </div>
       <div class="game-row-pick">
-        <div class="static-coin static-coin-xs game-pick-coin" aria-hidden="true"><span>H</span></div>
+        <div class="coin coin-xs">
+          <div class="coin-inner">
+            <div class="coin-face coin-heads"><span>H</span></div>
+            <div class="coin-face coin-tails"><span>T</span></div>
+          </div>
+        </div>
         <span class="pick-label"></span>
       </div>
       <div class="game-row-wager"></div>

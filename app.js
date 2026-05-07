@@ -1,5 +1,5 @@
 /* =====================================================================
-   Coinflip LB — app.js
+   Coinflip LB — app.js (v0.9)
    ---------------------------------------------------------------------
    Single-file SPA logic. No frameworks.
    - Inline feedback (no toast popups)
@@ -7,6 +7,10 @@
    - Dashboard with tabs: Open games / My games / Leaderboard
    - Result banner when one of the user's open games is joined+completed
    - Multi-stage 3D coin flip animation
+   - Creator-side flip animation when their game is joined
+   - Web Audio sound effects (no external assets)
+   - In-app confirm modal (no native confirm())
+   - Runtime config pulled from /api/config
    ===================================================================== */
 (function () {
   'use strict';
@@ -22,26 +26,38 @@
   const API = String(CONFIG.API_BASE_URL).replace(/\/+$/, '');
   const TOKEN_KEY = 'cfa_token';
   const THEME_KEY = 'cfa_theme';
+  const SFX_KEY   = 'cfa_sfx';
+  const SEEN_COMPLETED_PREFIX = 'cfa_seen_completed_';
+  const PENDING_CREATED_PREFIX = 'cfa_pending_created_';
+  const RESULT_CHECK_INTERVAL_MS = 7000;
+
+  function loadSfxPref() {
+    const stored = localStorage.getItem(SFX_KEY);
+    if (stored === null) return CONFIG.SFX_ENABLED_BY_DEFAULT !== false;
+    return stored === '1';
+  }
 
   const state = {
     token:          localStorage.getItem(TOKEN_KEY) || null,
     user:           null,
     activeAuthTab:  'login',
     activeMainTab:  'lobby',
-    filters:        {},                // { minWager, maxWager }
+    filters:        {},
     pages:          { lobby: 1, my: 1, leaderboard: 1 },
     totals:         { lobby: 0, my: 0, leaderboard: 0 },
     pageSize:       { lobby: 20, my: 20, leaderboard: 20 },
     isFlipping:     false,
     pollTimer:      null,
+    resultPollTimer:null,
     pollTick:       0,
     bannerTimer:    null,
-    seenCompletedIds: null,             // Set or null (null = not initialized)
+    seenCompletedIds: null,
+    pendingCreatedGameIds: null,
     lastBannerGameId: null,
-    // null = we have not checked yet. This prevents showing the lost lockout
-    // while the user's whole balance is escrowed in an open game.
     ownOpenGamesCount: null,
     theme:          localStorage.getItem(THEME_KEY) || 'dark',
+    sfxEnabled:     loadSfxPref(),
+    runtimeConfig:  null,
   };
 
   // -------------------------------------------------------------------
@@ -49,9 +65,6 @@
   // -------------------------------------------------------------------
   const $  = (s, root = document) => root.querySelector(s);
   const $$ = (s, root = document) => Array.from(root.querySelectorAll(s));
-
-  // We grab elements lazily inside an "els" object that gets populated
-  // once the DOM is parsed. Keeps the boot flow tidy.
   const els = {};
 
   function on(el, eventName, handler, options) {
@@ -78,9 +91,10 @@
       'myPager', 'myPrev', 'myNext', 'myPageInfo',
       'lbRows', 'lbEmpty', 'lbLoading', 'refreshLb',
       'lbPager', 'lbPrev', 'lbNext', 'lbPageInfo',
-      'flipModal', 'flipCoin', 'flipCoinInner', 'flipSub', 'flipResult',
+      'flipModal', 'flipCoin', 'flipCoinInner', 'flipSub', 'flipResult', 'flipTitle',
       'resultSide', 'resultPick', 'resultOutcome', 'resultAmount', 'resultBalance',
       'flipCloseBtn', 'tplGameRow', 'tplMyRow', 'tplLbRow',
+      'confirmModal', 'confirmTitle', 'confirmBody', 'confirmYes', 'confirmNo',
     ];
     const missing = required.filter(name => !els[name]);
     if (missing.length) {
@@ -92,22 +106,24 @@
 
   function captureElements() {
     Object.assign(els, {
-      // Topbar
-      topbar:       $('#topbar'),
-      brandName:    $('#brand-name'),
-      balancePill:  $('#balance-pill'),
-      balanceValue: $('#balance-value'),
-      userName:     $('#user-name'),
-      logoutBtn:    $('#logout-btn'),
-      themeToggle:  $('#theme-toggle'),
-      lostCard:     $('#lost-card'),
-      lostSignout:  $('#lost-signout'),
+      topbar:        $('#topbar'),
+      brandName:     $('#brand-name'),
+      balancePill:   $('#balance-pill'),
+      balanceValue:  $('#balance-value'),
+      userName:      $('#user-name'),
+      logoutBtn:     $('#logout-btn'),
+      themeToggle:   $('#theme-toggle'),
+      themeToggleAuth: $('#theme-toggle-auth'),
+      themeIconPath: $('#theme-icon-path'),
+      themeIconPathAuth: $('#theme-icon-path-auth'),
+      soundToggle:   $('#sound-toggle'),
+      soundIconPath: $('#sound-icon-path'),
+      lostCard:      $('#lost-card'),
+      lostSignout:   $('#lost-signout'),
 
-      // Views
       viewAuth:      $('#view-auth'),
       viewDashboard: $('#view-dashboard'),
 
-      // Auth forms
       formLogin:        $('#form-login'),
       formSignup:       $('#form-signup'),
       loginUsername:    $('#login-username'),
@@ -120,31 +136,26 @@
       loginFeedback:    $('#login-feedback'),
       signupFeedback:   $('#signup-feedback'),
 
-      // Result banner
       resultBanner:      $('#result-banner'),
       resultBannerCoin:  $('#result-banner-coin'),
       resultBannerTitle: $('#result-banner-title'),
       resultBannerSub:   $('#result-banner-sub'),
       resultBannerClose: $('#result-banner-close'),
 
-      // Create form
       formCreateGame: $('#form-create-game'),
       wagerInput:     $('#wager-input'),
       wagerHint:      $('#wager-hint'),
       createBtn:      $('#create-btn'),
       createFeedback: $('#create-feedback'),
 
-      // Tabs
       mainTabs:    $$('.main-tabs .tab'),
       authTabs:    $$('.auth-tabs .tab'),
       myGamesBadge: $('#my-games-badge'),
 
-      // Panels
       panelLobby:       $('#panel-lobby'),
       panelMy:          $('#panel-my'),
       panelLeaderboard: $('#panel-leaderboard'),
 
-      // Lobby panel
       gamesRows:    $('#games-rows'),
       gamesEmpty:   $('#games-empty'),
       gamesLoading: $('#games-loading'),
@@ -153,33 +164,31 @@
       applyFilters: $('#apply-filters'),
       clearFilters: $('#clear-filters'),
       refreshGames: $('#refresh-games'),
-      gamesPager:  $('#games-pager'),
-      gamesPrev:   $('#games-prev'),
-      gamesNext:   $('#games-next'),
-      gamesPageInfo: $('#games-page-info'),
+      gamesPager:   $('#games-pager'),
+      gamesPrev:    $('#games-prev'),
+      gamesNext:    $('#games-next'),
+      gamesPageInfo:$('#games-page-info'),
 
-      // My panel
       myRows:    $('#my-rows'),
       myEmpty:   $('#my-empty'),
       myLoading: $('#my-loading'),
       refreshMy: $('#refresh-my'),
-      myPager:  $('#my-pager'),
-      myPrev:   $('#my-prev'),
-      myNext:   $('#my-next'),
-      myPageInfo: $('#my-page-info'),
+      myPager:   $('#my-pager'),
+      myPrev:    $('#my-prev'),
+      myNext:    $('#my-next'),
+      myPageInfo:$('#my-page-info'),
 
-      // Leaderboard panel
       lbRows:    $('#lb-rows'),
       lbEmpty:   $('#lb-empty'),
       lbLoading: $('#lb-loading'),
       refreshLb: $('#refresh-lb'),
-      lbPager:  $('#lb-pager'),
-      lbPrev:   $('#lb-prev'),
-      lbNext:   $('#lb-next'),
-      lbPageInfo: $('#lb-page-info'),
+      lbPager:   $('#lb-pager'),
+      lbPrev:    $('#lb-prev'),
+      lbNext:    $('#lb-next'),
+      lbPageInfo:$('#lb-page-info'),
 
-      // Flip modal
       flipModal:     $('#flip-modal'),
+      flipTitle:     $('#flip-title'),
       flipCoin:      $('#flip-coin'),
       flipCoinInner: $('#flip-coin-inner'),
       flipSub:       $('#flip-sub'),
@@ -191,13 +200,121 @@
       resultBalance: $('#result-balance'),
       flipCloseBtn:  $('#flip-close-btn'),
 
-      // Templates
+      confirmModal: $('#confirm-modal'),
+      confirmTitle: $('#confirm-title'),
+      confirmBody:  $('#confirm-body'),
+      confirmYes:   $('#confirm-yes'),
+      confirmNo:    $('#confirm-no'),
+
       tplGameRow: $('#tpl-game-row'),
       tplMyRow:   $('#tpl-my-row'),
       tplLbRow:   $('#tpl-lb-row'),
     });
 
     if (els.brandName) els.brandName.textContent = CONFIG.APP_NAME;
+  }
+
+  // -------------------------------------------------------------------
+  // SOUND EFFECTS — Web Audio API, no external assets
+  // -------------------------------------------------------------------
+  let audioCtx = null;
+
+  function getCtx() {
+    if (!state.sfxEnabled) return null;
+    if (!audioCtx) {
+      try {
+        const Ctor = window.AudioContext || window.webkitAudioContext;
+        if (!Ctor) return null;
+        audioCtx = new Ctor();
+      } catch { return null; }
+    }
+    if (audioCtx.state === 'suspended') {
+      audioCtx.resume().catch(() => {});
+    }
+    return audioCtx;
+  }
+
+  function playTone({ freq = 440, dur = 0.08, type = 'sine', gain = 0.12, attack = 0.005, release = 0.06, freqEnd = null } = {}) {
+    const ctx = getCtx();
+    if (!ctx) return;
+    const t0 = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const g   = ctx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, t0);
+    if (freqEnd !== null) {
+      try { osc.frequency.exponentialRampToValueAtTime(Math.max(1, freqEnd), t0 + dur); } catch {}
+    }
+    g.gain.setValueAtTime(0, t0);
+    g.gain.linearRampToValueAtTime(gain, t0 + attack);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur + release);
+    osc.connect(g).connect(ctx.destination);
+    osc.start(t0);
+    osc.stop(t0 + dur + release + 0.02);
+  }
+
+  let tickInterval = null;
+  function startFlipTicks(durationMs) {
+    if (!state.sfxEnabled) return;
+    stopFlipTicks();
+    let i = 0;
+    const total = Math.max(1, Math.floor(durationMs / 110));
+    tickInterval = setInterval(() => {
+      const pitch = 1300 + (Math.sin(i * 0.7) * 180) + (i * 4);
+      playTone({ freq: pitch, dur: 0.02, type: 'square', gain: 0.045, attack: 0.001, release: 0.02 });
+      i += 1;
+      if (i >= total) stopFlipTicks();
+    }, 110);
+  }
+  function stopFlipTicks() {
+    if (tickInterval) { clearInterval(tickInterval); tickInterval = null; }
+  }
+
+  function playLandSound() {
+    if (!state.sfxEnabled) return;
+    playTone({ freq: 660, dur: 0.05, type: 'triangle', gain: 0.16, freqEnd: 220 });
+    setTimeout(() => playTone({ freq: 220, dur: 0.12, type: 'sine', gain: 0.10, freqEnd: 140 }), 60);
+  }
+
+  function playWinSound() {
+    if (!state.sfxEnabled) return;
+    [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => {
+      setTimeout(() => playTone({ freq: f, dur: 0.10, type: 'triangle', gain: 0.13 }), i * 90);
+    });
+  }
+
+  function playLossSound() {
+    if (!state.sfxEnabled) return;
+    [392, 311.13, 233.08].forEach((f, i) => {
+      setTimeout(() => playTone({ freq: f, dur: 0.16, type: 'sawtooth', gain: 0.10 }), i * 110);
+    });
+  }
+
+  function playClick() {
+    if (!state.sfxEnabled) return;
+    playTone({ freq: 920, dur: 0.02, type: 'square', gain: 0.05 });
+  }
+
+  function applySfxIcon() {
+    if (!els.soundIconPath || !els.soundToggle) return;
+    if (state.sfxEnabled) {
+      els.soundIconPath.setAttribute('d', 'M11 5L6 9H3v6h3l5 4V5zm5.5 7a4.5 4.5 0 0 0-2.5-4v8a4.5 4.5 0 0 0 2.5-4z');
+      els.soundToggle.title = 'Mute sounds';
+      els.soundToggle.setAttribute('aria-label', 'Mute sounds');
+      els.soundToggle.classList.remove('is-muted');
+    } else {
+      els.soundIconPath.setAttribute('d', 'M11 5L6 9H3v6h3l5 4V5zm5 4l5 5m0-5l-5 5');
+      els.soundToggle.title = 'Unmute sounds';
+      els.soundToggle.setAttribute('aria-label', 'Unmute sounds');
+      els.soundToggle.classList.add('is-muted');
+    }
+  }
+
+  function toggleSfx() {
+    state.sfxEnabled = !state.sfxEnabled;
+    localStorage.setItem(SFX_KEY, state.sfxEnabled ? '1' : '0');
+    applySfxIcon();
+    if (state.sfxEnabled) playClick();
   }
 
   // -------------------------------------------------------------------
@@ -220,7 +337,7 @@
     if (opts.body && !(opts.body instanceof FormData)) {
       headers['Content-Type'] = headers['Content-Type'] || 'application/json';
     }
-    if (state.token) {
+    if (state.token && !opts.skipAuth) {
       headers['Authorization'] = `Bearer ${state.token}`;
     }
 
@@ -244,7 +361,6 @@
 
     if (!res.ok) {
       const msg = (data && data.error) ? data.error : `Request failed (${res.status})`;
-      // Auto-logout on 401 (token expired or invalid)
       if (res.status === 401 && state.token) {
         clearSession();
         showAuthView();
@@ -256,7 +372,7 @@
   }
 
   // -------------------------------------------------------------------
-  // Inline feedback (replaces toast popups)
+  // Inline feedback
   // -------------------------------------------------------------------
   function showFeedback(el, message, type = 'info') {
     if (!el) return;
@@ -348,28 +464,17 @@
     return Math.floor(n).toLocaleString('en-US', { maximumFractionDigits: 0 });
   }
 
-  // Balance colors: red at $0, then brighter tiers as the player climbs.
-  // Past $10,000 it intentionally becomes clean white.
   function getBalanceTone(balance) {
     const n = Math.max(0, Math.floor(Number(balance) || 0));
     if (n >= 10000) return { key: 'b-white', bg: '#f8fafc', fg: '#0f172a', glow: 'rgba(248, 250, 252, 0.34)' };
+    if (n >= 5000)  return { key: 'b-5000',  bg: '#f59e0b', fg: '#1f1300', glow: 'rgba(245, 158, 11, 0.46)' };
     if (n >= 2000)  return { key: 'b-2000',  bg: '#d946ef', fg: '#fff7ff', glow: 'rgba(217, 70, 239, 0.42)' };
-    if (n >= 1500)  return { key: 'b-1500',  bg: '#8b5cf6', fg: '#ffffff', glow: 'rgba(139, 92, 246, 0.45)' };
-    if (n >= 1000)  return { key: 'b-1000',  bg: '#3b82f6', fg: '#eff6ff', glow: 'rgba(59, 130, 246, 0.42)' };
-    if (n >= 500)   return { key: 'b-500',   bg: '#06b6d4', fg: '#ecfeff', glow: 'rgba(6, 182, 212, 0.40)' };
-    if (n >= 400)   return { key: 'b-400',   bg: '#14b8a6', fg: '#ecfdf5', glow: 'rgba(20, 184, 166, 0.38)' };
-    if (n >= 300)   return { key: 'b-300',   bg: '#22c55e', fg: '#052e16', glow: 'rgba(34, 197, 94, 0.38)' };
+    if (n >= 1000)  return { key: 'b-1000',  bg: '#8b5cf6', fg: '#ffffff', glow: 'rgba(139, 92, 246, 0.45)' };
+    if (n >= 500)   return { key: 'b-500',   bg: '#3b82f6', fg: '#eff6ff', glow: 'rgba(59, 130, 246, 0.42)' };
+    if (n >= 300)   return { key: 'b-300',   bg: '#06b6d4', fg: '#ecfeff', glow: 'rgba(6, 182, 212, 0.40)' };
     if (n >= 200)   return { key: 'b-200',   bg: '#84cc16', fg: '#1a2e05', glow: 'rgba(132, 204, 22, 0.38)' };
-    if (n >= 100)   return { key: 'b-100',   bg: '#facc15', fg: '#422006', glow: 'rgba(250, 204, 21, 0.40)' };
-    if (n > 0) {
-      const t = Math.min(1, n / 100);
-      return {
-        key: 'b-low',
-        bg: `color-mix(in srgb, #ef4444 ${Math.round(100 - t * 48)}%, #22c55e ${Math.round(t * 52)}%)`,
-        fg: '#fff7ed',
-        glow: 'rgba(245, 158, 11, 0.32)'
-      };
-    }
+    if (n >= 100)   return { key: 'b-100',   bg: '#22c55e', fg: '#052e16', glow: 'rgba(34, 197, 94, 0.42)' };
+    if (n > 0)      return { key: 'b-low',   bg: '#ef4444', fg: '#fff1f2', glow: 'rgba(239, 68, 68, 0.42)' };
     return { key: 'b-zero', bg: '#ef4444', fg: '#fff1f2', glow: 'rgba(239, 68, 68, 0.42)' };
   }
 
@@ -424,6 +529,34 @@
   }
 
   // -------------------------------------------------------------------
+  // Confirm modal (replaces window.confirm)
+  // -------------------------------------------------------------------
+  let confirmResolver = null;
+  function confirmModal({ title, body, confirmText, cancelText, danger = true } = {}) {
+    return new Promise((resolve) => {
+      els.confirmTitle.textContent = title || 'Are you sure?';
+      els.confirmBody.textContent  = body  || '';
+      els.confirmYes.textContent   = confirmText || 'Yes';
+      els.confirmNo.textContent    = cancelText  || 'No';
+      els.confirmYes.classList.toggle('btn-danger', !!danger);
+      els.confirmYes.classList.toggle('btn-primary', !danger);
+      els.confirmModal.hidden = false;
+      els.confirmModal.setAttribute('aria-hidden', 'false');
+      confirmResolver = resolve;
+      setTimeout(() => els.confirmNo.focus(), 30);
+    });
+  }
+  function closeConfirmModal(answer) {
+    els.confirmModal.hidden = true;
+    els.confirmModal.setAttribute('aria-hidden', 'true');
+    if (confirmResolver) {
+      const r = confirmResolver;
+      confirmResolver = null;
+      r(answer);
+    }
+  }
+
+  // -------------------------------------------------------------------
   // Theme + wager limits
   // -------------------------------------------------------------------
   function hasOwnOpenGames() {
@@ -433,10 +566,6 @@
   function isEliminated() {
     if (!state.user) return false;
     const balance = Number(state.user.balance);
-
-    // Important: a $0 available balance does not always mean the player lost.
-    // The balance can be $0 because their money is reserved in an open game.
-    // Only lock them out after we know they have no open games left.
     if (!Number.isFinite(balance) || balance > 0) return false;
     if (state.ownOpenGamesCount === null) return false;
     return !hasOwnOpenGames();
@@ -447,9 +576,6 @@
     document.body.classList.toggle('is-eliminated', lost);
     if (els.lostCard) els.lostCard.hidden = !lost;
 
-    // updateWagerLimitUI owns the create-form disabled state because a user can
-    // have $0 available while still having an open game in escrow.
-
     if (els.createFeedback && lost) {
       showFeedback(els.createFeedback, 'You Lost! You can still view games and the leaderboard, but you cannot create, join, or cancel games.', 'error');
     } else if (els.createFeedback && !lost && els.createFeedback.textContent.includes('You Lost!')) {
@@ -457,37 +583,49 @@
     }
   }
 
+  const SUN_PATH  = 'M12 4V2m0 20v-2m8-8h2M2 12h2m13.66-5.66l1.42-1.42M4.93 19.07l1.41-1.41m0-11.32L4.93 4.93m14.14 14.14l-1.42-1.42M12 7a5 5 0 1 0 0 10 5 5 0 0 0 0-10z';
+  const MOON_PATH = 'M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z';
+
   function applyTheme(theme) {
     const next = (theme === 'light') ? 'light' : 'dark';
     state.theme = next;
     document.body.dataset.theme = next;
     localStorage.setItem(THEME_KEY, next);
-    if (els.themeToggle) {
-      els.themeToggle.textContent = next === 'light' ? '☾' : '☀';
-      els.themeToggle.title = next === 'light' ? 'Switch to dark mode' : 'Switch to light mode';
-      els.themeToggle.setAttribute('aria-label', els.themeToggle.title);
-    }
+    const path = next === 'light' ? MOON_PATH : SUN_PATH;
+    const label = next === 'light' ? 'Switch to dark mode' : 'Switch to light mode';
+    if (els.themeIconPath)     els.themeIconPath.setAttribute('d', path);
+    if (els.themeIconPathAuth) els.themeIconPathAuth.setAttribute('d', path);
+    [els.themeToggle, els.themeToggleAuth].forEach(btn => {
+      if (btn) {
+        btn.title = label;
+        btn.setAttribute('aria-label', label);
+      }
+    });
   }
 
   function toggleTheme() {
     applyTheme(state.theme === 'light' ? 'dark' : 'light');
+    playClick();
   }
 
   function getMaxAllowedWager() {
-    const configMax = Number(CONFIG.MAX_WAGER) || Number.MAX_SAFE_INTEGER;
-    const balance = state.user ? Number(state.user.balance) : configMax;
+    const cfgMax = Number((state.runtimeConfig && state.runtimeConfig.maxWager) || CONFIG.MAX_WAGER) || Number.MAX_SAFE_INTEGER;
+    const balance = state.user ? Number(state.user.balance) : cfgMax;
     const safeBalance = Number.isFinite(balance) ? Math.max(0, balance) : 0;
-    return Math.max(0, Math.min(configMax, safeBalance));
+    return Math.max(0, Math.min(cfgMax, safeBalance));
+  }
+
+  function getMinWager() {
+    return Number((state.runtimeConfig && state.runtimeConfig.minWager) || CONFIG.MIN_WAGER) || 1;
   }
 
   function updateWagerLimitUI() {
     if (!els.wagerInput) return;
-    const min = Number(CONFIG.MIN_WAGER) || 1;
+    const min = getMinWager();
     const max = getMaxAllowedWager();
     const lost = isEliminated();
     const unavailable = max < min;
 
-    // The UI should stay clean under WAGER: input + button only.
     if (els.wagerHint) {
       els.wagerHint.textContent = '';
       els.wagerHint.hidden = true;
@@ -506,8 +644,6 @@
       els.wagerInput.placeholder = 'No money available';
     }
 
-    // Do not allow creating a new game with $0 available balance, but do not
-    // show the full "You Lost" lockout while an open game still exists.
     const createDisabled = lost || unavailable;
     els.wagerInput.disabled = createDisabled;
     if (els.createBtn) els.createBtn.disabled = createDisabled;
@@ -518,6 +654,50 @@
     }
   }
 
+  // -------------------------------------------------------------------
+  // Result notification storage
+  // -------------------------------------------------------------------
+  function idSetFromStorage(key) {
+    try {
+      const raw = localStorage.getItem(key);
+      const list = raw ? JSON.parse(raw) : [];
+      return new Set(Array.isArray(list) ? list.map(Number).filter(Number.isFinite) : []);
+    } catch {
+      return new Set();
+    }
+  }
+  function saveIdSet(key, set, limit = 120) {
+    try {
+      const list = Array.from(set).map(Number).filter(Number.isFinite).slice(-limit);
+      localStorage.setItem(key, JSON.stringify(list));
+    } catch {}
+  }
+  function seenCompletedKey() {
+    return state.user ? `${SEEN_COMPLETED_PREFIX}${state.user.id}` : null;
+  }
+  function pendingCreatedKey() {
+    return state.user ? `${PENDING_CREATED_PREFIX}${state.user.id}` : null;
+  }
+  function loadNotificationSets() {
+    const seenKey = seenCompletedKey();
+    const pendingKey = pendingCreatedKey();
+    state.seenCompletedIds = seenKey ? idSetFromStorage(seenKey) : new Set();
+    state.pendingCreatedGameIds = pendingKey ? idSetFromStorage(pendingKey) : new Set();
+  }
+  function saveSeenCompletedIds() {
+    const key = seenCompletedKey();
+    if (key && state.seenCompletedIds) saveIdSet(key, state.seenCompletedIds);
+  }
+  function savePendingCreatedIds() {
+    const key = pendingCreatedKey();
+    if (key && state.pendingCreatedGameIds) saveIdSet(key, state.pendingCreatedGameIds, 60);
+  }
+  function trackCreatedGameForNotification(gameId) {
+    if (!gameId) return;
+    if (!state.pendingCreatedGameIds) loadNotificationSets();
+    state.pendingCreatedGameIds.add(Number(gameId));
+    savePendingCreatedIds();
+  }
 
   // -------------------------------------------------------------------
   // Session
@@ -526,12 +706,14 @@
     state.token = token;
     state.user  = user;
     if (token) localStorage.setItem(TOKEN_KEY, token);
+    if (user) loadNotificationSets();
     updateTopbar();
   }
   function clearSession() {
     state.token = null;
     state.user  = null;
     state.seenCompletedIds = null;
+    state.pendingCreatedGameIds = null;
     state.lastBannerGameId = null;
     state.ownOpenGamesCount = null;
     localStorage.removeItem(TOKEN_KEY);
@@ -569,12 +751,14 @@
     els.viewAuth.hidden = false;
     els.viewDashboard.hidden = true;
     els.topbar.hidden = !state.user;
+    if (els.themeToggleAuth) els.themeToggleAuth.hidden = false;
   }
   function showDashboardView() {
     document.body.dataset.view = 'dashboard';
     els.viewAuth.hidden = true;
     els.viewDashboard.hidden = false;
     els.topbar.hidden = false;
+    if (els.themeToggleAuth) els.themeToggleAuth.hidden = true;
   }
 
   function switchAuthTab(name) {
@@ -601,10 +785,8 @@
     els.panelMy.hidden          = (name !== 'my');
     els.panelLeaderboard.hidden = (name !== 'leaderboard');
 
-    // Clearing the badge when user opens My Games
     if (name === 'my') hideMyGamesBadge();
 
-    // Refresh the panel they just opened
     if (name === 'lobby')       refreshOpenGames().catch(() => {});
     if (name === 'my')          refreshMyGames().catch(() => {});
     if (name === 'leaderboard') refreshLeaderboard().catch(() => {});
@@ -625,7 +807,7 @@
       showFeedback(els.signupFeedback, 'Username must be 3–32 characters: letters, numbers, dot, underscore, or hyphen.', 'error');
       return;
     }
-    const minPasswordLength = Number(CONFIG.MIN_PASSWORD_LENGTH) || 6;
+    const minPasswordLength = Number((state.runtimeConfig && state.runtimeConfig.minPasswordLength) || CONFIG.MIN_PASSWORD_LENGTH) || 6;
     if (password.length < minPasswordLength) {
       showFeedback(els.signupFeedback, `Password must be at least ${minPasswordLength} characters.`, 'error');
       return;
@@ -678,7 +860,8 @@
     }
   }
 
-  function handleLogout() {
+  async function handleLogout() {
+    try { await api('/api/auth/logout', { method: 'POST' }); } catch {}
     clearSession();
     showAuthView();
     switchAuthTab('login');
@@ -688,20 +871,31 @@
   }
 
   // -------------------------------------------------------------------
+  // Runtime config
+  // -------------------------------------------------------------------
+  async function loadRuntimeConfig() {
+    try {
+      const data = await api('/api/config', { skipAuth: true });
+      state.runtimeConfig = data;
+      updateWagerLimitUI();
+    } catch (err) {
+      console.warn('[loadRuntimeConfig] using client defaults:', err.message);
+    }
+  }
+
+  // -------------------------------------------------------------------
   // Dashboard entry & polling
   // -------------------------------------------------------------------
   async function enterDashboard() {
     showDashboardView();
     switchMainTab('lobby');
 
-    // Reset completion tracking for this session
-    state.seenCompletedIds = null;
+    loadNotificationSets();
 
-    // Initial fetches: lobby is already refreshed by switchMainTab.
-    // Keep this light so mobile devices do not feel laggy on sign-in.
     await Promise.allSettled([
       refreshMe(),
-      refreshMyGames(),
+      refreshMyGames({ skipCompletionDetection: true }),
+      refreshCompletedNotifications({ initial: true }),
     ]);
     startPolling();
   }
@@ -710,15 +904,10 @@
     try {
       const data = await api('/api/me');
       state.user = data.user;
-
-      // If the server reports $0, check open games before showing the lost state.
-      // Without this, a full-balance open wager looks like a loss even though it
-      // can still be cancelled or won.
       const balance = Number(state.user?.balance);
       if (Number.isFinite(balance) && balance <= 0) {
         await refreshOwnOpenGamesCount();
       }
-
       updateTopbar();
     } catch (err) {
       if (!(err instanceof ApiError) || err.status !== 401) {
@@ -733,22 +922,23 @@
       if (document.hidden || state.isFlipping || !state.user) return;
       state.pollTick += 1;
 
-      // My games is the lightweight notification feed, so keep it fresh.
       refreshMyGames({ silent: true, forNotification: true }).catch(() => {});
 
-      // Only refresh the visible heavy list. This keeps phones smoother and
-      // avoids unnecessary requests as the app grows.
       if (state.activeMainTab === 'lobby') refreshOpenGames({ silent: true }).catch(() => {});
       if (state.activeMainTab === 'leaderboard' && state.pollTick % 6 === 0) refreshLeaderboard({ silent: true }).catch(() => {});
-
-      // Balance changes after actions/completions; keep this fresh so
-      // the creator of a game sees the result without touching refresh.
       refreshMe().catch(() => {});
     }, Math.max(2500, Number(CONFIG.POLLING_INTERVAL_MS) || 4000));
+
+    state.resultPollTimer = setInterval(() => {
+      if (document.hidden || state.isFlipping || !state.user) return;
+      refreshCompletedNotifications({ silent: true }).catch(() => {});
+    }, RESULT_CHECK_INTERVAL_MS);
   }
   function stopPolling() {
     if (state.pollTimer) clearInterval(state.pollTimer);
+    if (state.resultPollTimer) clearInterval(state.resultPollTimer);
     state.pollTimer = null;
+    state.resultPollTimer = null;
   }
 
   async function refreshOwnOpenGamesCount() {
@@ -756,7 +946,6 @@
       state.ownOpenGamesCount = null;
       return 0;
     }
-
     try {
       const data = await api('/api/me/games?status=open&page=1&limit=1');
       const count = Number(data.total);
@@ -764,8 +953,6 @@
       return state.ownOpenGamesCount;
     } catch (err) {
       console.warn('[refreshOwnOpenGamesCount]', err);
-      // Keep the previous value if the check fails. If there is no previous
-      // value, stay unlocked instead of incorrectly declaring a loss.
       if (state.ownOpenGamesCount === null) return 0;
       return state.ownOpenGamesCount;
     }
@@ -825,15 +1012,16 @@
       $('.game-row-name', node).textContent = g.creator_username;
       $('.game-row-time', node).textContent = formatRelative(g.created_at);
 
-      // Static coin face for the creator's pick. Do NOT use the animated 3D coin
-      // here; it has depth/rim pseudo-elements that overlap at small sizes.
-      const pickCoin = $('.game-pick-coin', node);
-      if (pickCoin) {
-        const side = (g.creator_choice === 'tails') ? 'tails' : 'heads';
-        pickCoin.classList.toggle('static-coin-heads', side === 'heads');
-        pickCoin.classList.toggle('static-coin-tails', side === 'tails');
-        const coinText = pickCoin.querySelector('span');
-        if (coinText) coinText.textContent = side === 'heads' ? 'H' : 'T';
+      const avatar = $('.avatar', node);
+      if (avatar && g.creator_username) {
+        avatar.textContent = String(g.creator_username).charAt(0).toUpperCase();
+        avatar.classList.add('avatar-letter');
+      }
+
+      const coin = $('.coin', node);
+      if (g.creator_choice === 'tails') {
+        const inner = $('.coin-inner', coin);
+        if (inner) inner.style.transform = 'rotateY(180deg)';
       }
       $('.pick-label', node).textContent = capitalize(g.creator_choice);
       $('.game-row-wager', node).textContent = formatMoney(g.wager);
@@ -857,7 +1045,7 @@
           joinBtn.disabled = true;
           joinBtn.textContent = 'Insufficient';
         } else {
-          on(joinBtn, 'click', () => handleJoinGame(g.id, joinBtn));
+          on(joinBtn, 'click', () => handleJoinGame(g.id, g.wager, joinBtn));
         }
       }
       frag.appendChild(node);
@@ -896,8 +1084,6 @@
       const games = data.games || [];
       const meta = normalizeMeta(data, games, page, limit);
       if (options.forOpenCount) {
-        // Only a status=open request has a reliable total for open games.
-        // A mixed first page can miss older open games and falsely lock a user.
         state.ownOpenGamesCount = meta.total;
         updateWagerLimitUI();
         applyEliminatedState();
@@ -915,7 +1101,7 @@
       } else if (state.activeMainTab === 'my' && page === state.pages.my && !options.forOpenCount) {
         renderMyGames(games);
       }
-      if (!options.forOpenCount) processCompletionDetection(games);
+      if (options.detectCompletions && !options.forOpenCount) processCompletionDetection(games);
     } catch (err) {
       console.warn('[refreshMyGames]', err);
       if (!options.silent && !options.forNotification) setListLoading('my', true, 'Could not load your games.', true);
@@ -975,7 +1161,6 @@
         status.textContent = won ? 'Won' : 'Lost';
         status.classList.add(won ? 's-win' : 's-loss');
 
-        // Build detail text safely (no innerHTML with user data)
         detail.innerHTML = '';
         const part1 = document.createElement('span');
         part1.textContent = 'vs ';
@@ -1001,48 +1186,63 @@
     els.myRows.appendChild(frag);
   }
 
-  function processCompletionDetection(games) {
+  async function refreshCompletedNotifications(options = {}) {
     if (!state.user) return;
+    const data = await api('/api/me/games?status=completed&page=1&limit=20');
+    processCompletionDetection(data.games || [], options);
+  }
 
-    const completedIds = new Set(
-      games.filter(g => g.status === 'completed').map(g => g.id)
-    );
+  function processCompletionDetection(games, options = {}) {
+    if (!state.user) return;
+    if (!state.seenCompletedIds || !state.pendingCreatedGameIds) loadNotificationSets();
 
-    // First load: just record what we already see; don't surface anything.
-    if (state.seenCompletedIds === null) {
-      state.seenCompletedIds = completedIds;
-      return;
+    const completed = games.filter(g => g.status === 'completed');
+    const completedIds = new Set(completed.map(g => Number(g.id)).filter(Number.isFinite));
+
+    const isBrandNewSeenList = state.seenCompletedIds.size === 0 && !localStorage.getItem(seenCompletedKey());
+    const pendingOnInitialLoad = completed.filter(g => state.pendingCreatedGameIds.has(Number(g.id)));
+    let newOnes = completed.filter(g => !state.seenCompletedIds.has(Number(g.id)));
+    if (options.initial && isBrandNewSeenList) {
+      newOnes = pendingOnInitialLoad;
     }
 
-    // Find newly completed games (not in previous set)
-    const newOnes = games.filter(g =>
-      g.status === 'completed' && !state.seenCompletedIds.has(g.id)
-    );
-
-    newOnes.forEach(g => state.seenCompletedIds.add(g.id));
+    completedIds.forEach(id => state.seenCompletedIds.add(id));
+    completedIds.forEach(id => state.pendingCreatedGameIds.delete(id));
+    saveSeenCompletedIds();
+    savePendingCreatedIds();
 
     if (newOnes.length === 0) return;
 
-    // Show the most recent unseen completion in the banner.
-    // If the user just clicked "join" themselves, the flip modal already
-    // shows them the result — skip the banner for that game id.
     const fresh = newOnes
       .filter(g => g.id !== state.lastBannerGameId && !justSawInModal(g))
       .sort((a, b) => new Date(b.completed_at) - new Date(a.completed_at))[0];
+
     if (fresh) {
-      showResultBanner(fresh);
+      // If the user is the CREATOR of this freshly completed game,
+      // show them the same flip animation the joiner saw — instead of
+      // just a banner. Symmetric experience for both sides.
+      const myId = state.user.id;
+      const isCreatorOfFresh = (fresh.creator_id === myId);
+      if (isCreatorOfFresh && !state.isFlipping) {
+        showCreatorFlip(fresh).catch(err => {
+          console.warn('[showCreatorFlip]', err);
+          showResultBanner(fresh);
+        });
+      } else {
+        showResultBanner(fresh);
+      }
       refreshMe().catch(() => {});
       refreshOwnOpenGamesCount().then(() => { updateWagerLimitUI(); applyEliminatedState(); }).catch(() => {});
-      refreshLeaderboard().catch(() => {});
+      refreshLeaderboard({ silent: true }).catch(() => {});
+      if (state.activeMainTab === 'lobby') refreshOpenGames({ silent: true }).catch(() => {});
+      if (state.activeMainTab === 'my') refreshMyGames({ silent: true }).catch(() => {});
     }
 
-    // If they're not currently looking at My Games, bump the badge
     if (state.activeMainTab !== 'my') {
       bumpMyGamesBadge(newOnes.length);
     }
   }
 
-  // The user just saw the modal for a game they joined — don't double-show
   let lastModalGameId = null;
   function justSawInModal(g) {
     return lastModalGameId === g.id;
@@ -1076,20 +1276,10 @@
     els.resultBanner.classList.remove('is-win', 'is-loss');
     els.resultBanner.classList.add(won ? 'is-win' : 'is-loss');
 
-    // Show the actual landed side with the same isolated static coin used in the picker.
-    if (els.resultBannerCoin) {
-      const side = (g.result === 'tails') ? 'tails' : 'heads';
-      els.resultBannerCoin.classList.toggle('static-coin-heads', side === 'heads');
-      els.resultBannerCoin.classList.toggle('static-coin-tails', side === 'tails');
-      const coinText = els.resultBannerCoin.querySelector('span');
-      if (coinText) coinText.textContent = side === 'heads' ? 'H' : 'T';
-    }
-
     els.resultBannerTitle.textContent = won
       ? `You won ${formatMoney(wager * 2)}!`
       : `You lost ${formatMoney(wager)}.`;
 
-    // Build subtitle safely (no innerHTML with user data)
     els.resultBannerSub.innerHTML = '';
     const a = document.createElement('span');
     a.textContent = `Game vs `;
@@ -1102,12 +1292,13 @@
     els.resultBannerSub.appendChild(c);
 
     els.resultBanner.hidden = false;
-    els.resultBanner.setAttribute('role', 'alert');
+    els.resultBanner.setAttribute('role', 'status');
     if (state.bannerTimer) clearTimeout(state.bannerTimer);
     state.bannerTimer = setTimeout(hideResultBanner, 20000);
     if (navigator.vibrate) {
       try { navigator.vibrate(won ? [35, 40, 35] : [60]); } catch {}
     }
+    if (won) playWinSound(); else playLossSound();
   }
   function hideResultBanner() {
     if (state.bannerTimer) {
@@ -1189,11 +1380,23 @@
       showFeedback(els.createFeedback, 'Pick heads or tails.', 'error');
       return;
     }
-    const minWager = Number(CONFIG.MIN_WAGER) || 1;
+    const minWager = getMinWager();
     const maxWager = getMaxAllowedWager();
     if (wager === null || wager < minWager || wager > maxWager) {
       showFeedback(els.createFeedback, `Wager must be between ${compactMoney(minWager)} and ${compactMoney(maxWager)}.`, 'error');
       return;
+    }
+
+    // Confirm large wagers (>= 50% of balance and >= $100)
+    if (state.user && wager >= 100 && wager >= Math.floor(Number(state.user.balance) * 0.5)) {
+      const ok = await confirmModal({
+        title: 'Confirm wager',
+        body: `You're wagering ${formatMoney(wager)} — that's a big chunk of your balance. Continue?`,
+        confirmText: 'Wager it',
+        cancelText: 'Back',
+        danger: false,
+      });
+      if (!ok) return;
     }
 
     setLoading(els.createBtn, true);
@@ -1202,18 +1405,17 @@
         method: 'POST',
         body: JSON.stringify({ choice, wager }),
       });
+      if (data.game) trackCreatedGameForNotification(data.game.id);
       if (data.user) {
         state.user = data.user;
-        // This newly-created game holds the wager in escrow, so a $0 balance
-        // here is not a loss.
         state.ownOpenGamesCount = Math.max(1, Number(state.ownOpenGamesCount) || 0);
         updateTopbar();
       }
       els.wagerInput.value = '';
       els.formCreateGame.querySelectorAll('input[name="choice"]').forEach(input => { input.checked = false; });
       updateWagerLimitUI();
+      playClick();
       showFeedback(els.createFeedback, 'Game created. Waiting for an opponent…', 'success');
-      // Refresh open games and the user's games immediately
       refreshOpenGames();
       refreshMyGames();
       refreshMe();
@@ -1233,7 +1435,15 @@
       showFeedback(els.createFeedback, 'You Lost! You cannot cancel games.', 'error');
       return;
     }
-    if (!gameId || !confirm('Cancel this open game and refund the wager?')) return;
+    if (!gameId) return;
+    const ok = await confirmModal({
+      title: 'Cancel game?',
+      body: 'Cancel this open game and refund the wager? You can always create a new one.',
+      confirmText: 'Cancel game',
+      cancelText: 'Keep game',
+      danger: true,
+    });
+    if (!ok) return;
     setLoading(btn, true);
     try {
       const data = await api(`/api/games/${gameId}/cancel`, { method: 'POST' });
@@ -1256,30 +1466,40 @@
   }
 
   // -------------------------------------------------------------------
-  // Join game (with flip animation)
+  // Join game (with flip animation) — JOINER side
   // -------------------------------------------------------------------
-  async function handleJoinGame(gameId, btn) {
+  async function handleJoinGame(gameId, wager, btn) {
     if (isEliminated()) {
       showFeedback(els.createFeedback, 'You Lost! You cannot join games.', 'error');
       return;
     }
     if (state.isFlipping) return;
+
+    if (state.user && Number(wager) >= 100 && Number(wager) >= Math.floor(Number(state.user.balance) * 0.5)) {
+      const ok = await confirmModal({
+        title: 'Join this flip?',
+        body: `${formatMoney(wager)} on the line. Win or lose, the result is final.`,
+        confirmText: 'Flip it',
+        cancelText: 'Back',
+        danger: false,
+      });
+      if (!ok) return;
+    }
+
     state.isFlipping = true;
     setLoading(btn, true);
-    openFlipModal();
+    openFlipModal({ title: 'Flipping the coin…', sub: 'Server is choosing the result…' });
 
     try {
       const data = await api(`/api/games/${gameId}/join`, { method: 'POST' });
       lastModalGameId = data.game.id;
       els.flipSub.textContent = 'Here it goes…';
-      // Brief beat so the user reads the subtitle change
       await wait(350);
       await animateFlip(data.game.result);
       revealFlipResult(data);
     } catch (err) {
       closeFlipModal();
       showFeedback(els.createFeedback, err.message, 'error');
-      // Refresh in case the game was taken by someone else
       refreshOpenGames();
     } finally {
       state.isFlipping = false;
@@ -1287,17 +1507,50 @@
     }
   }
 
+  // -------------------------------------------------------------------
+  // CREATOR-side flip: when the user's open game has just been joined
+  // and completed, replay the flip animation for them too.
+  // -------------------------------------------------------------------
+  async function showCreatorFlip(g) {
+    if (!state.user) return;
+    state.isFlipping = true;
+    state.lastBannerGameId = g.id;
+    lastModalGameId = g.id;
+
+    openFlipModal({ title: 'Someone joined your game!', sub: `${g.joiner_username || 'A player'} took your bet…` });
+
+    try {
+      await wait(550);
+      els.flipSub.textContent = 'Here it goes…';
+      await wait(280);
+      await animateFlip(g.result);
+
+      // Build a payload that revealFlipResult expects
+      const payload = {
+        game: g,
+        user: state.user,
+        balance: state.user ? state.user.balance : 0,
+      };
+      revealFlipResult(payload);
+    } catch (err) {
+      console.warn('[showCreatorFlip] flip failed', err);
+      closeFlipModal();
+      showResultBanner(g);
+    } finally {
+      state.isFlipping = false;
+    }
+  }
+
   function wait(ms) {
     return new Promise(r => setTimeout(r, ms));
   }
 
-  function openFlipModal() {
-    // Reset state
+  function openFlipModal({ title, sub } = {}) {
     els.flipResult.hidden = true;
-    els.flipSub.textContent = 'Server is choosing the result…';
+    if (title && els.flipTitle) els.flipTitle.textContent = title;
+    if (els.flipSub) els.flipSub.textContent = sub || 'Server is choosing the result…';
     const inner = els.flipCoinInner;
     inner.style.removeProperty('--final-y');
-    inner.style.removeProperty('--final-x');
     inner.style.removeProperty('--toss-duration');
     inner.style.transform = '';
     els.flipCoin.classList.remove('is-tossing');
@@ -1312,26 +1565,23 @@
       const inner = els.flipCoinInner;
       const coin  = els.flipCoin;
 
-      // Heads = even number of half-turns (lands face up).
-      // Tails = odd number of half-turns. Multiply by 360 for a clean
-      // multi-rotation finish, then add 180 for tails.
-      const finalX = (result === 'heads') ? '2160deg' : '2340deg';
-      // Fast readable vertical flip: about 1.5s of motion, then result.
-      const configuredDuration = Number(CONFIG.DEFAULT_FLIP_DURATION_MS) || 1500;
-      const dur = Math.min(Math.max(configuredDuration, 1350), 1650);
+      const finalY = (result === 'heads') ? '1440deg' : '1620deg';
+      const configuredDuration = Number(CONFIG.DEFAULT_FLIP_DURATION_MS) || 4200;
+      const dur = Math.min(Math.max(configuredDuration, 4200), 5400);
 
-      inner.style.setProperty('--final-x', finalX);
-      // Keep the old variable updated too so older fallback CSS never lands wrong.
-      inner.style.setProperty('--final-y', (result === 'heads') ? '2880deg' : '3060deg');
+      inner.style.setProperty('--final-y', finalY);
       inner.style.setProperty('--toss-duration', `${dur}ms`);
       coin.style.setProperty('--toss-duration', `${dur}ms`);
 
       coin.classList.remove('is-waiting');
-      // Force reflow so animation restarts cleanly
       void coin.offsetWidth;
       coin.classList.add('is-tossing');
 
       els.flipSub.textContent = 'Tossing…';
+
+      // Sound effects: ticks during the spin, thud at the end.
+      startFlipTicks(dur);
+      setTimeout(() => { stopFlipTicks(); playLandSound(); }, dur - 30);
 
       setTimeout(resolve, dur + 30);
     });
@@ -1356,7 +1606,6 @@
     els.resultAmount.textContent  = won ? `+${formatMoney(wager * 2)}` : (hitZero ? 'You Lost!' : `−${formatMoney(wager)}`);
     els.resultBalance.textContent = formatMoney(newBalance);
 
-    // Color the result rows
     const allRows = els.flipResult.querySelectorAll('.result-row');
     allRows.forEach(r => r.classList.remove('row-win', 'row-loss'));
     const outcomeRow = els.resultOutcome.closest('.result-row');
@@ -1366,8 +1615,11 @@
 
     els.flipResult.hidden = false;
 
-    // Update local user balance from server response. Older backend responses
-    // returned { balance }; newer ones may return { user }.
+    if (won) playWinSound(); else playLossSound();
+    if (navigator.vibrate) {
+      try { navigator.vibrate(won ? [35, 40, 35] : [60]); } catch {}
+    }
+
     if (data.user) {
       state.user = data.user;
       updateTopbar();
@@ -1375,12 +1627,15 @@
       state.user = { ...state.user, balance: Number(data.balance) };
       updateTopbar();
     }
-    // The game is now in completed state — record it as already seen so
-    // the result banner doesn't double-fire on the next poll.
-    if (state.seenCompletedIds) state.seenCompletedIds.add(game.id);
+    if (state.seenCompletedIds) {
+      state.seenCompletedIds.add(game.id);
+      saveSeenCompletedIds();
+    }
+    if (state.pendingCreatedGameIds) {
+      state.pendingCreatedGameIds.delete(Number(game.id));
+      savePendingCreatedIds();
+    }
 
-    // Refresh other panels in the background, including the open-game
-    // count that decides whether a $0 player is truly eliminated.
     refreshOwnOpenGamesCount().then(() => { updateWagerLimitUI(); applyEliminatedState(); }).catch(() => {});
     refreshOpenGames().catch(() => {});
     refreshMyGames().catch(() => {});
@@ -1392,6 +1647,7 @@
     els.flipModal.setAttribute('aria-hidden', 'true');
     els.flipCoin.classList.remove('is-tossing', 'is-waiting');
     els.flipResult.hidden = true;
+    stopFlipTicks();
   }
 
   // -------------------------------------------------------------------
@@ -1413,6 +1669,8 @@
     on(els.logoutBtn, 'click', handleLogout);
     on(els.lostSignout, 'click', handleLogout);
     on(els.themeToggle, 'click', toggleTheme);
+    on(els.themeToggleAuth, 'click', toggleTheme);
+    on(els.soundToggle, 'click', toggleSfx);
 
     // Create
     on(els.formCreateGame, 'submit', handleCreateGame);
@@ -1423,19 +1681,19 @@
     on(els.filterMin, 'input', () => sanitizeIntegerInput(els.filterMin));
     on(els.filterMax, 'input', () => sanitizeIntegerInput(els.filterMax));
 
-    // Open games filters / refresh
+    // Open games
     on(els.applyFilters, 'click', applyFilters);
     on(els.clearFilters, 'click', clearFilters);
     on(els.refreshGames, 'click', () => refreshOpenGames());
     on(els.gamesPrev, 'click', () => { if (state.pages.lobby > 1) { state.pages.lobby -= 1; refreshOpenGames(); } });
     on(els.gamesNext, 'click', () => { state.pages.lobby += 1; refreshOpenGames(); });
 
-    // My games refresh
+    // My games
     on(els.refreshMy, 'click', () => refreshMyGames());
     on(els.myPrev, 'click', () => { if (state.pages.my > 1) { state.pages.my -= 1; refreshMyGames(); } });
     on(els.myNext, 'click', () => { state.pages.my += 1; refreshMyGames(); });
 
-    // Leaderboard refresh
+    // Leaderboard
     on(els.refreshLb, 'click', () => refreshLeaderboard());
     on(els.lbPrev, 'click', () => { if (state.pages.leaderboard > 1) { state.pages.leaderboard -= 1; refreshLeaderboard(); } });
     on(els.lbNext, 'click', () => { state.pages.leaderboard += 1; refreshLeaderboard(); });
@@ -1445,6 +1703,16 @@
 
     // Flip modal close
     on(els.flipCloseBtn, 'click', closeFlipModal);
+
+    // Confirm modal
+    on(els.confirmYes, 'click', () => closeConfirmModal(true));
+    on(els.confirmNo,  'click', () => closeConfirmModal(false));
+    on(els.confirmModal, 'click', (e) => {
+      if (e.target === els.confirmModal) closeConfirmModal(false);
+    });
+    on(document, 'keydown', (e) => {
+      if (e.key === 'Escape' && !els.confirmModal.hidden) closeConfirmModal(false);
+    });
 
     // [data-action] navigation
     on(document.body, 'click', (e) => {
@@ -1457,15 +1725,17 @@
       }
     });
 
-    // Refresh data when tab becomes visible again
-    on(document, 'visibilitychange', () => {
-      if (document.hidden) return;
-      if (!state.user) return;
+    const refreshAfterReturn = () => {
+      if (!state.user || state.isFlipping) return;
+      refreshCompletedNotifications({ silent: true }).catch(() => {});
       refreshMe().catch(() => {});
       refreshMyGames({ forNotification: true, silent: true }).catch(() => {});
       refreshOpenGames({ silent: true }).catch(() => {});
       if (state.activeMainTab === 'leaderboard') refreshLeaderboard({ silent: true }).catch(() => {});
-    });
+    };
+    on(document, 'visibilitychange', () => { if (!document.hidden) refreshAfterReturn(); });
+    on(window, 'focus', refreshAfterReturn);
+    on(window, 'pageshow', refreshAfterReturn);
   }
 
   // -------------------------------------------------------------------
@@ -1474,6 +1744,7 @@
   async function boot() {
     captureElements();
     applyTheme(state.theme);
+    applySfxIcon();
     if (!assertRequiredElements()) {
       document.body.dataset.config = 'error';
       return;
@@ -1481,11 +1752,13 @@
     wireEvents();
     document.body.dataset.config = 'ready';
 
+    // Pull authoritative limits from /api/config (non-blocking).
+    loadRuntimeConfig().catch(() => {});
+
     if (!state.token) {
       showAuthView();
       return;
     }
-    // Try to restore the session
     try {
       const data = await api('/api/me');
       setSession(state.token, data.user);

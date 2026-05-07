@@ -810,11 +810,6 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
     inset 0 4px 10px rgba(255,255,255,0.45),
     0 0 0 2px rgba(60, 65, 85, 0.5);
 }
-
-.coin-tails.static-tail {
-  transform: none;
-}
-
 .coin-flipped-base .coin-inner { transform: rotateY(180deg); }
 
 /* Sizes */
@@ -2057,762 +2052,225 @@ body.is-eliminated .topbar .balance-pill {
   }
 }
 
-
 /* =====================================================================
-   v0.11 tails + physical flip polish
-   - Tails is always a silver T, even while the coin is edge-on.
-   - The coin uses isolated front/back faces plus a neutral metallic rim so
-     the edge never looks like a stretched heads texture during a flip.
+   v0.11 fixes: reliable creator notifications, simpler coin toss,
+   restored tails face, cleaner fonts, centered leaderboard money.
    ===================================================================== */
-.coin {
-  --coin-depth: clamp(4px, 1.45vw, 12px);
-  --coin-edge-light: #f8fafc;
-  --coin-edge-mid: #cbd5e1;
-  --coin-edge-dark: #475569;
-  perspective: 1500px;
-  transform-style: preserve-3d;
-  overflow: visible;
+:root {
+  --font: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
 }
-.coin-inner {
-  transform-style: preserve-3d;
-  transform-origin: center center;
-  will-change: transform;
+body {
+  letter-spacing: -0.006em;
 }
-.coin-face {
-  transform-style: preserve-3d;
-  backface-visibility: hidden !important;
-  -webkit-backface-visibility: hidden !important;
-  overflow: hidden;
-  clip-path: circle(49.8% at 50% 50%);
+.card-title,
+.auth-title,
+.brand-text,
+.field-label,
+.tab,
+.btn {
+  letter-spacing: -0.018em;
 }
-.coin-inner::before {
-  content: "";
-  position: absolute;
-  inset: 3.25%;
-  border-radius: 50%;
-  transform: translateZ(calc(var(--coin-depth) * -1));
-  background:
-    repeating-conic-gradient(from -10deg,
-      rgba(255,255,255,.42) 0deg 4deg,
-      rgba(148,163,184,.42) 4deg 8deg,
-      rgba(71,85,105,.34) 8deg 12deg),
-    radial-gradient(circle at 38% 30%, var(--coin-edge-light) 0 18%, var(--coin-edge-mid) 48%, var(--coin-edge-dark) 100%);
-  box-shadow:
-    0 0 0 var(--coin-depth) var(--coin-edge-mid),
-    inset 0 0 20px rgba(15,23,42,.28),
-    inset 0 0 0 2px rgba(255,255,255,.18);
-  backface-visibility: visible;
-  -webkit-backface-visibility: visible;
-  pointer-events: none;
+
+/* Force the coin letters so Tails can never inherit/show H. */
+.coin-heads > span,
+.coin-tails > span {
+  font-size: 0;
+  line-height: 1;
 }
-.coin-inner::after {
-  content: "";
-  position: absolute;
-  inset: 5%;
-  border-radius: 50%;
-  transform: rotateY(90deg) scaleX(.12);
-  background: linear-gradient(90deg, var(--coin-edge-dark), var(--coin-edge-light) 48%, var(--coin-edge-dark));
-  box-shadow: 0 0 calc(var(--coin-depth) * 1.4) rgba(15,23,42,.32);
-  backface-visibility: visible;
-  -webkit-backface-visibility: visible;
-  pointer-events: none;
+.coin-heads > span::before,
+.coin-tails > span::before {
+  font-size: inherit;
+  font-weight: 950;
+  letter-spacing: -0.08em;
 }
-.coin-heads {
-  color: #5a3500;
-  transform: translateZ(var(--coin-depth));
-  background:
-    radial-gradient(circle at 30% 22%, rgba(255,255,255,.93) 0 9%, transparent 10%),
-    radial-gradient(circle at 48% 46%, #ffe8a3 0 33%, #f6b81e 56%, #9a6206 100%);
-}
+.coin-heads > span::before { content: "H"; }
+.coin-tails > span::before { content: "T"; }
 .coin-tails {
   color: #1f2937;
-  transform: rotateY(180deg) translateZ(var(--coin-depth));
   background:
-    radial-gradient(circle at 30% 22%, rgba(255,255,255,.98) 0 9%, transparent 10%),
-    radial-gradient(circle at 48% 46%, #ffffff 0 30%, #e2e8f0 51%, #94a3b8 73%, #475569 100%);
-  border-color: rgba(248,250,252,.52);
-  box-shadow:
-    inset 0 14px 22px rgba(255,255,255,.42),
-    inset 0 -18px 26px rgba(15,23,42,.28),
-    inset 0 0 0 2px rgba(255,255,255,.22);
+    radial-gradient(circle at 30% 22%, rgba(255,255,255,.95) 0 9%, transparent 10%),
+    radial-gradient(circle at 50% 48%, #ffffff 0 30%, #d7dde8 52%, #7b8798 100%);
 }
-.coin-heads::before { border-color: rgba(116,72,0,.34); }
-.coin-tails::before { border-color: rgba(51,65,85,.38); }
-.coin-face span {
-  position: relative;
-  z-index: 3;
-  width: 1em;
-  height: 1em;
-  display: grid;
-  place-items: center;
-  color: transparent !important;
-  text-shadow: none !important;
-}
-.coin-face span::before {
-  position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  font: inherit;
-  letter-spacing: inherit;
-  line-height: 1;
-  transform: translateZ(calc(var(--coin-depth) + 2px));
-}
-.coin-heads span::before {
-  content: "H";
-  color: #5a3500;
-  text-shadow: 0 2px 0 rgba(255,255,255,.28), 0 -1px 0 rgba(58,32,0,.26);
-}
-.coin-tails span::before {
-  content: "T";
-  color: #1f2937;
-  text-shadow: 0 2px 0 rgba(255,255,255,.62), 0 -1px 0 rgba(15,23,42,.22);
-}
+.coin-tails::before { border-color: rgba(31,41,55,.30); }
+.coin-tails::after { background: rgba(255,255,255,.14); }
 .coin-flipped-base .coin-inner,
 .coin.coin-flipped-base .coin-inner {
-  transform: rotateY(180deg);
+  transform: rotateY(180deg) !important;
 }
 
+/* Simple coin toss: one arc, fewer rotations, calmer landing. */
 .flip-stage {
-  perspective: 1600px;
+  min-height: clamp(235px, 38vh, 320px);
   overflow: hidden;
+  background:
+    radial-gradient(circle at 50% 48%, color-mix(in srgb, var(--primary) 10%, transparent) 0%, transparent 46%),
+    radial-gradient(ellipse at 50% 82%, rgba(0,0,0,.24), transparent 46%);
 }
+.coin-xl {
+  width: clamp(160px, 25vw, 204px);
+  height: clamp(160px, 25vw, 204px);
+}
+.coin-xl .coin-face { font-size: clamp(68px, 10vw, 90px); }
 .coin.is-waiting .coin-inner {
-  animation: coin-ready-silver 1350ms ease-in-out infinite;
+  animation: coin-ready-simple 1800ms ease-in-out infinite !important;
 }
-@keyframes coin-ready-silver {
-  0%, 100% { transform: translate3d(0,0,0) rotateX(5deg) rotateY(-16deg) rotateZ(-1deg); }
-  50%      { transform: translate3d(0,-7px,0) rotateX(-5deg) rotateY(16deg) rotateZ(1deg); }
+@keyframes coin-ready-simple {
+  0%, 100% { transform: translate3d(0,0,0) rotateX(8deg) rotateY(-12deg) rotateZ(0deg); }
+  50%      { transform: translate3d(0,-7px,0) rotateX(0deg) rotateY(14deg) rotateZ(0deg); }
 }
 .coin.is-tossing .coin-inner {
-  animation: coin-flip-silver var(--toss-duration, 2800ms) cubic-bezier(.18,.76,.18,1) forwards;
+  animation: coin-flip-simple var(--toss-duration, 4200ms) cubic-bezier(.2,.72,.18,1) forwards !important;
 }
-@keyframes coin-flip-silver {
-  0%   { transform: translate3d(0, 0, 0) rotateX(0deg) rotateY(0deg) rotateZ(0deg) scale(1); }
-  12%  { transform: translate3d(-5px, -28px, 0) rotateX(10deg) rotateY(430deg) rotateZ(-4deg) scale(1.03); }
-  28%  { transform: translate3d(7px, -80px, 0) rotateX(-8deg) rotateY(980deg) rotateZ(4deg) scale(1.06); }
-  46%  { transform: translate3d(-5px, -108px, 0) rotateX(7deg) rotateY(1560deg) rotateZ(-3deg) scale(1.07); }
-  64%  { transform: translate3d(5px, -72px, 0) rotateX(-5deg) rotateY(2140deg) rotateZ(2deg) scale(1.04); }
-  80%  { transform: translate3d(-2px, -22px, 0) rotateX(3deg) rotateY(calc(var(--final-y, 2880deg) - 118deg)) rotateZ(-1deg) scale(1.02); }
-  90%  { transform: translate3d(0, 0, 0) rotateX(0deg) rotateY(calc(var(--final-y, 2880deg) + 12deg)) rotateZ(0deg) scale(1.055, .93); }
-  96%  { transform: translate3d(0, -6px, 0) rotateX(0deg) rotateY(calc(var(--final-y, 2880deg) - 5deg)) rotateZ(0deg) scale(.985, 1.025); }
-  100% { transform: translate3d(0, 0, 0) rotateX(0deg) rotateY(var(--final-y, 2880deg)) rotateZ(0deg) scale(1); }
+@keyframes coin-flip-simple {
+  0%   { transform: translate3d(0,0,0) rotateX(8deg) rotateY(0deg) scale(1); }
+  18%  { transform: translate3d(0,-54px,0) rotateX(190deg) rotateY(360deg) scale(1.025); }
+  38%  { transform: translate3d(0,-96px,0) rotateX(360deg) rotateY(760deg) scale(1.045); }
+  60%  { transform: translate3d(0,-78px,0) rotateX(520deg) rotateY(1080deg) scale(1.035); }
+  82%  { transform: translate3d(0,-18px,0) rotateX(690deg) rotateY(calc(var(--final-y, 1440deg) - 70deg)) scale(1.01); }
+  94%  { transform: translate3d(0,0,0) rotateX(720deg) rotateY(calc(var(--final-y, 1440deg) + 4deg)) scale(1.025, .965); }
+  100% { transform: translate3d(0,0,0) rotateX(720deg) rotateY(var(--final-y, 1440deg)) scale(1); }
 }
 .coin-xl.is-tossing .coin-shadow {
-  animation: coin-shadow-silver var(--toss-duration, 2800ms) cubic-bezier(.18,.76,.18,1) forwards;
+  animation: coin-shadow-simple var(--toss-duration, 4200ms) cubic-bezier(.2,.72,.18,1) forwards !important;
 }
-@keyframes coin-shadow-silver {
-  0%, 100% { transform: translateX(-50%) scaleX(1); opacity: .42; }
-  28%      { transform: translateX(-50%) scaleX(.48); opacity: .20; }
-  46%      { transform: translateX(-50%) scaleX(.30); opacity: .12; }
-  76%      { transform: translateX(-50%) scaleX(.72); opacity: .30; }
-  90%      { transform: translateX(-50%) scaleX(.95); opacity: .38; }
-}
-@media (prefers-reduced-motion: reduce) {
-  .coin.is-waiting .coin-inner,
-  .coin.is-tossing .coin-inner,
-  .coin-xl.is-tossing .coin-shadow {
-    animation: none !important;
-  }
-  .coin.is-tossing .coin-inner {
-    transform: rotateY(var(--final-y, 2880deg));
-    transition: transform 520ms ease-out;
-  }
+@keyframes coin-shadow-simple {
+  0%, 100% { transform: translateX(-50%) scaleX(1); opacity: .40; }
+  38%      { transform: translateX(-50%) scaleX(.46); opacity: .16; }
+  70%      { transform: translateX(-50%) scaleX(.68); opacity: .26; }
+  92%      { transform: translateX(-50%) scaleX(.94); opacity: .36; }
 }
 
-/* =====================================================================
-   FIX: static heads/tails selector coins
-   ---------------------------------------------------------------------
-   The create-game side buttons were using the 3D flip coin markup for tiny
-   static icons. Old .static-tail / .coin-flipped-base rules fought with
-   later 3D depth rules, so both buttons could show the heads texture.
-   For the side picker, render exactly one flat face per option.
-   ===================================================================== */
-.choice-row .choice-card .coin-sm {
-  perspective: none;
-  transform: none;
-  contain: paint;
+/* Leaderboard money pills: center the balance inside the rounded box. */
+.leaderboard-rows .lb-row {
+  align-items: center;
 }
-.choice-row .choice-card .coin-sm::after,
-.choice-row .choice-card .coin-sm .coin-inner::before {
-  display: none;
+.lb-name {
+  font-weight: 750;
 }
-.choice-row .choice-card .coin-sm .coin-inner {
-  transform: none !important;
-  transform-style: flat;
-  transition: none;
+.lb-rank {
+  font-variant-numeric: tabular-nums;
 }
-.choice-row .choice-card .coin-sm .coin-face {
-  inset: 0;
-  transform: none !important;
-  backface-visibility: visible;
-  -webkit-backface-visibility: visible;
-}
-.choice-row .choice-card input[value="heads"] ~ .choice-content .coin-tails,
-.choice-row .choice-card input[value="tails"] ~ .choice-content .coin-heads {
-  display: none !important;
-}
-.choice-row .choice-card input[value="heads"] ~ .choice-content .coin-heads,
-.choice-row .choice-card input[value="tails"] ~ .choice-content .coin-tails {
-  display: flex !important;
-}
-.choice-row .choice-card input[value="heads"] ~ .choice-content .coin-heads {
-  color: #5a3500;
-  background:
-    radial-gradient(circle at 30% 22%, rgba(255,255,255,.93) 0 9%, transparent 10%),
-    radial-gradient(circle at 48% 46%, #ffe8a3 0 33%, #f6b81e 56%, #9a6206 100%);
-}
-.choice-row .choice-card input[value="tails"] ~ .choice-content .coin-tails {
-  color: #1f2937;
-  background:
-    radial-gradient(circle at 30% 22%, rgba(255,255,255,.98) 0 9%, transparent 10%),
-    radial-gradient(circle at 48% 46%, #ffffff 0 30%, #e2e8f0 51%, #94a3b8 73%, #475569 100%);
-  border-color: rgba(248,250,252,.52);
-}
-
-
-/* ------------------------------------------------------------------
-   FIX: Static choice coins
-   The heads/tails picker must not use the animated 3D coin stack. The
-   old markup put both faces in the same small preview, while later CSS
-   re-applied 3D transforms and rim/shine pseudo-elements. That caused
-   the silver rim/face layers to overlap and made Heads/Tails look the
-   same. These previews are now one real face only.
-   ------------------------------------------------------------------ */
-.choice-row .choice-coin {
-  perspective: none !important;
-  transform: none !important;
-  contain: paint;
-  overflow: hidden;
-  border-radius: 50%;
-}
-.choice-row .choice-coin::after,
-.choice-row .choice-coin .coin-inner::before {
-  display: none !important;
-  content: none !important;
-}
-.choice-row .choice-coin .coin-inner {
-  transform: none !important;
-  transform-style: flat !important;
-  width: 100%;
-  height: 100%;
-}
-.choice-row .choice-coin .coin-face {
-  display: flex !important;
-  transform: none !important;
-  inset: 0;
-  border-radius: 50%;
-  overflow: hidden;
-  clip-path: circle(50% at 50% 50%);
-  backface-visibility: visible !important;
-  -webkit-backface-visibility: visible !important;
-}
-.choice-row .choice-coin-heads .coin-heads {
-  background:
-    radial-gradient(circle at 34% 26%, #fff7cc 0 12%, transparent 13%),
-    radial-gradient(circle at 34% 30%, #ffe287 0%, #f5b301 46%, #a86d06 100%) !important;
-  color: #5a3a00 !important;
-  box-shadow:
-    inset 0 -4px 10px rgba(0,0,0,0.28),
-    inset 0 4px 10px rgba(255,255,255,0.35),
-    0 0 0 2px rgba(120, 80, 5, 0.5) !important;
-}
-.choice-row .choice-coin-tails .coin-tails {
-  background:
-    radial-gradient(circle at 34% 26%, #ffffff 0 12%, transparent 13%),
-    radial-gradient(circle at 34% 30%, #f9fafb 0%, #cdd3df 48%, #667085 100%) !important;
-  color: #2d3346 !important;
-  box-shadow:
-    inset 0 -4px 10px rgba(0,0,0,0.30),
-    inset 0 4px 10px rgba(255,255,255,0.45),
-    0 0 0 2px rgba(60, 65, 85, 0.5) !important;
-}
-
-
-/* =====================================================================
-   FINAL FIX: side picker coins are NOT the animated 3D coin component
-   ---------------------------------------------------------------------
-   The previous picker reused .coin/.coin-inner/.coin-face, while the app
-   defines that component several times later in the stylesheet for the
-   flip modal. Those global rules added hidden front/back faces, depth
-   pseudo-elements, and a metallic edge layer. On tiny selector coins those
-   layers stacked on top of each other, creating the white/silver halo and
-   the weird radial pattern.
-
-   These picker icons now use their own class names only. Nothing from the
-   3D flip coin can cascade into them.
-   ===================================================================== */
-.choice-row .picker-coin {
-  flex: 0 0 auto;
-  width: 48px;
-  height: 48px;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  position: relative;
-  isolation: isolate;
-  overflow: hidden;
-  box-sizing: border-box;
+.lb-balance {
+  justify-content: center !important;
+  text-align: center !important;
+  min-width: 104px;
+  padding: 6px 12px;
   font-weight: 900;
-  font-size: 22px;
-  line-height: 1;
-  letter-spacing: -0.04em;
-  transform: none !important;
-  transition: transform 180ms ease, filter 180ms ease;
-  filter: drop-shadow(0 8px 14px rgba(0,0,0,.25));
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.025em;
 }
-.choice-row .picker-coin::before,
-.choice-row .picker-coin::after {
-  content: "";
-  position: absolute;
-  border-radius: 50%;
-  pointer-events: none;
+.game-row-wager,
+.my-row-amount {
+  font-variant-numeric: tabular-nums;
 }
-.choice-row .picker-coin::before {
-  inset: 7px;
-  border: 2px solid currentColor;
-  opacity: .28;
+@media (max-width: 720px) {
+  .flip-stage { min-height: clamp(220px, 36vh, 290px); }
+  .coin-xl { width: clamp(142px, 46vw, 184px); height: clamp(142px, 46vw, 184px); }
+  .coin-xl .coin-face { font-size: clamp(60px, 20vw, 80px); }
+  .lb-balance { min-width: 94px; }
 }
-.choice-row .picker-coin::after {
-  inset: 13px;
-  border: 1px solid rgba(255,255,255,.34);
-  box-shadow: inset 0 3px 8px rgba(255,255,255,.18), inset 0 -4px 9px rgba(0,0,0,.16);
-  opacity: .75;
-}
-.choice-row .picker-coin span {
+
+/* Correct the forced coin letters without shrinking them. */
+.coin-heads > span,
+.coin-tails > span {
   position: relative;
-  z-index: 2;
-  width: 1.28em;
-  height: 1.28em;
-  border-radius: 50%;
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  font-size: 1em;
+  color: transparent !important;
+}
+.coin-heads > span::before,
+.coin-tails > span::before {
+  position: absolute;
+  inset: 0;
   display: grid;
   place-items: center;
-  text-shadow: 0 2px 0 rgba(255,255,255,.22), 0 -1px 0 rgba(0,0,0,.20);
+  font-size: 1em;
+  font-weight: 950;
+  line-height: 1;
+  color: currentColor;
 }
-.choice-row .picker-coin-heads {
-  color: #6b4200;
-  border: 3px solid #d49313;
-  background:
-    radial-gradient(circle at 30% 22%, rgba(255,255,255,.90) 0 8%, transparent 9%),
-    radial-gradient(circle at 50% 48%, #ffe9a8 0 31%, #f7bd26 54%, #b87309 76%, #704500 100%);
-  box-shadow:
-    inset 0 10px 14px rgba(255,255,255,.32),
-    inset 0 -12px 18px rgba(76,42,0,.34),
-    0 0 0 1px rgba(255,211,87,.20);
-}
-.choice-row .picker-coin-heads span {
-  background: rgba(255,227,137,.35);
-  border: 1px solid rgba(107,66,0,.24);
-}
-.choice-row .picker-coin-tails {
-  color: #273244;
-  border: 3px solid #9aa8ba;
-  background:
-    radial-gradient(circle at 30% 22%, rgba(255,255,255,.98) 0 8%, transparent 9%),
-    radial-gradient(circle at 50% 48%, #ffffff 0 30%, #e5eaf1 53%, #a8b3c1 76%, #596777 100%);
-  box-shadow:
-    inset 0 10px 14px rgba(255,255,255,.46),
-    inset 0 -12px 18px rgba(15,23,42,.24),
-    0 0 0 1px rgba(226,232,240,.22);
-}
-.choice-row .picker-coin-tails span {
-  background: rgba(255,255,255,.36);
-  border: 1px solid rgba(39,50,68,.20);
-}
-.choice-card:hover .picker-coin,
-.choice-card:has(input:checked) .picker-coin {
-  transform: translateY(-1px) scale(1.03) !important;
-}
-@media (max-width: 720px) {
-  .choice-row .picker-coin { width: 42px; height: 42px; font-size: 19px; }
-}
+.coin-heads > span::before { color: #5a3500; }
+.coin-tails > span::before { color: #1f2937; }
 
 /* =====================================================================
-   v0.12 GLOBAL COIN BUG FIX
-   ---------------------------------------------------------------------
-   Static UI coins and the animated flip coin are now completely separated.
-   Nothing in the old .coin/.coin-inner/.coin-face stack can affect these.
-   This fixes the white/silver halo and the radial/overlapped texture in:
-   - create-game heads/tails picker
-   - open-games rows
-   - result banner
-   - auth/logo decoration
-   - flip animation modal
+   v0.9 additions — SVG icon buttons in topbar, confirm modal,
+   avatar letters, sound toggle.
    ===================================================================== */
-.static-coin {
-  --static-coin-size: 48px;
-  width: var(--static-coin-size) !important;
-  height: var(--static-coin-size) !important;
-  min-width: var(--static-coin-size) !important;
-  border-radius: 999px !important;
-  position: relative !important;
-  display: inline-grid !important;
-  place-items: center !important;
-  isolation: isolate !important;
-  overflow: hidden !important;
-  box-sizing: border-box !important;
-  flex: 0 0 auto !important;
-  font-weight: 900 !important;
-  font-size: calc(var(--static-coin-size) * .46) !important;
-  line-height: 1 !important;
-  letter-spacing: -.05em !important;
-  transform: none;
-  filter: drop-shadow(0 7px 12px rgba(0,0,0,.28));
+
+/* Icon buttons live inside the topbar now. */
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border-radius: 999px;
+  border: 1px solid var(--line-2);
+  background: color-mix(in srgb, var(--bg-elev-2) 70%, transparent);
+  color: var(--text);
+  box-shadow: var(--shadow-sm);
+  cursor: pointer;
+  transition: transform 120ms ease, background 150ms ease, border-color 150ms ease, color 150ms ease;
 }
-.static-coin::before,
-.static-coin::after {
-  content: "" !important;
-  position: absolute !important;
-  border-radius: 999px !important;
-  pointer-events: none !important;
-  z-index: 1 !important;
+.icon-btn:hover {
+  transform: translateY(-1px);
+  border-color: var(--primary);
+  color: var(--primary-hi);
 }
-.static-coin::before {
-  inset: 14% !important;
-  border: max(1px, calc(var(--static-coin-size) * .04)) solid currentColor !important;
-  opacity: .28 !important;
+.icon-btn:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
 }
-.static-coin::after {
-  inset: 28% !important;
-  border: 1px solid rgba(255,255,255,.38) !important;
-  box-shadow: inset 0 3px 8px rgba(255,255,255,.18), inset 0 -4px 9px rgba(0,0,0,.16) !important;
-  opacity: .72 !important;
-}
-.static-coin > span {
-  position: relative !important;
-  z-index: 2 !important;
-  width: 1.28em !important;
-  height: 1.28em !important;
-  border-radius: 999px !important;
-  display: grid !important;
-  place-items: center !important;
-  text-shadow: 0 2px 0 rgba(255,255,255,.25), 0 -1px 0 rgba(0,0,0,.22) !important;
-}
-.static-coin-heads {
-  color: #6b4200 !important;
-  border: max(2px, calc(var(--static-coin-size) * .065)) solid #d49313 !important;
-  background:
-    radial-gradient(circle at 30% 22%, rgba(255,255,255,.92) 0 8%, transparent 9%),
-    radial-gradient(circle at 50% 48%, #fff0b6 0 30%, #f7bd26 54%, #b87309 76%, #704500 100%) !important;
-  box-shadow:
-    inset 0 10px 14px rgba(255,255,255,.32),
-    inset 0 -12px 18px rgba(76,42,0,.34),
-    0 0 0 1px rgba(255,211,87,.22) !important;
-}
-.static-coin-heads > span {
-  background: rgba(255,227,137,.34) !important;
-  border: 1px solid rgba(107,66,0,.25) !important;
-}
-.static-coin-tails {
-  color: #273244 !important;
-  border: max(2px, calc(var(--static-coin-size) * .065)) solid #9aa8ba !important;
-  background:
-    radial-gradient(circle at 30% 22%, rgba(255,255,255,1) 0 8%, transparent 9%),
-    radial-gradient(circle at 50% 48%, #ffffff 0 29%, #e5eaf1 53%, #a8b3c1 76%, #596777 100%) !important;
-  box-shadow:
-    inset 0 10px 14px rgba(255,255,255,.46),
-    inset 0 -12px 18px rgba(15,23,42,.24),
-    0 0 0 1px rgba(226,232,240,.25) !important;
-}
-.static-coin-tails > span {
-  background: rgba(255,255,255,.36) !important;
-  border: 1px solid rgba(39,50,68,.20) !important;
-}
-.static-coin-xs { --static-coin-size: 26px; font-size: 13px !important; }
-.static-coin-sm { --static-coin-size: 42px; }
-.static-coin-md { --static-coin-size: 84px; }
-.static-coin-choice { --static-coin-size: 48px; }
-.choice-card:hover .static-coin-choice,
-.choice-card:has(input:checked) .static-coin-choice {
-  transform: translateY(-1px) scale(1.03) !important;
-}
-.result-banner-coin.static-coin {
-  background-image: inherit;
-}
-.result-banner.is-win .result-banner-coin.static-coin,
-.result-banner.is-loss .result-banner-coin.static-coin {
-  background-image: inherit !important;
-}
-@media (max-width: 720px) {
-  .static-coin-choice { --static-coin-size: 42px; }
-  .static-coin-md { --static-coin-size: 58px; }
+.icon-btn.is-muted {
+  color: var(--text-mute);
+  border-color: var(--line);
 }
 
-/* New isolated flip modal coin. It intentionally does not use .coin. */
-.flip-coin {
-  --flip-size: clamp(160px, 54vw, 210px);
-  --flip-depth: clamp(7px, 2.4vw, 14px);
-  --final-y: 2880deg;
-  --toss-duration: 2800ms;
-  width: var(--flip-size) !important;
-  height: var(--flip-size) !important;
-  position: relative !important;
-  margin: 0 auto !important;
-  perspective: 1600px !important;
-  transform-style: preserve-3d !important;
-  overflow: visible !important;
-}
-.flip-coin-inner {
-  position: absolute !important;
-  inset: 0 !important;
-  border-radius: 50% !important;
-  transform-style: preserve-3d !important;
-  transform-origin: center center !important;
-  will-change: transform !important;
-}
-.flip-coin-inner::before {
-  content: "" !important;
-  position: absolute !important;
-  inset: 2.5% !important;
-  border-radius: 50% !important;
-  transform: translateZ(calc(var(--flip-depth) * -1)) !important;
-  background:
-    repeating-conic-gradient(from -10deg, rgba(255,255,255,.35) 0deg 4deg, rgba(148,163,184,.34) 4deg 8deg, rgba(71,85,105,.32) 8deg 12deg),
-    radial-gradient(circle at 38% 30%, #f8fafc 0 18%, #cbd5e1 48%, #475569 100%) !important;
-  box-shadow:
-    0 0 0 var(--flip-depth) #cbd5e1,
-    inset 0 0 22px rgba(15,23,42,.28),
-    inset 0 0 0 2px rgba(255,255,255,.18) !important;
-  backface-visibility: visible !important;
-  pointer-events: none !important;
-}
-.flip-face {
-  position: absolute !important;
-  inset: 0 !important;
-  border-radius: 50% !important;
-  display: grid !important;
-  place-items: center !important;
-  overflow: hidden !important;
-  clip-path: circle(49.8% at 50% 50%) !important;
-  font-weight: 900 !important;
-  font-size: clamp(68px, 23vw, 92px) !important;
-  line-height: 1 !important;
-  letter-spacing: -.06em !important;
-  border: max(3px, calc(var(--flip-depth) * .62)) solid rgba(255,255,255,.18) !important;
-  box-shadow: inset 0 16px 28px rgba(255,255,255,.28), inset 0 -22px 30px rgba(15,23,42,.24) !important;
-  backface-visibility: hidden !important;
-  -webkit-backface-visibility: hidden !important;
-}
-.flip-face::before,
-.flip-face::after {
-  content: "" !important;
-  position: absolute !important;
-  border-radius: 50% !important;
-  pointer-events: none !important;
-}
-.flip-face::before {
-  inset: 15% !important;
-  border: max(2px, calc(var(--flip-depth) * .30)) solid currentColor !important;
-  opacity: .28 !important;
-}
-.flip-face::after {
-  inset: 29% !important;
-  border: 2px solid rgba(255,255,255,.30) !important;
-  box-shadow: inset 0 8px 18px rgba(255,255,255,.18), inset 0 -10px 20px rgba(0,0,0,.16) !important;
-  opacity: .78 !important;
-}
-.flip-face > span {
-  position: relative !important;
-  z-index: 2 !important;
-  width: 1.25em !important;
-  height: 1.25em !important;
-  border-radius: 50% !important;
-  display: grid !important;
-  place-items: center !important;
-}
-.flip-face-heads {
-  transform: translateZ(var(--flip-depth)) !important;
-  color: #6b4200 !important;
-  background:
-    radial-gradient(circle at 30% 22%, rgba(255,255,255,.92) 0 8%, transparent 9%),
-    radial-gradient(circle at 50% 48%, #fff0b6 0 30%, #f7bd26 54%, #b87309 76%, #704500 100%) !important;
-}
-.flip-face-heads > span {
-  background: rgba(255,227,137,.34) !important;
-  border: 1px solid rgba(107,66,0,.25) !important;
-  text-shadow: 0 3px 0 rgba(255,255,255,.28), 0 -2px 0 rgba(58,32,0,.25) !important;
-}
-.flip-face-tails {
-  transform: rotateY(180deg) translateZ(var(--flip-depth)) !important;
-  color: #273244 !important;
-  background:
-    radial-gradient(circle at 30% 22%, rgba(255,255,255,1) 0 8%, transparent 9%),
-    radial-gradient(circle at 50% 48%, #ffffff 0 29%, #e5eaf1 53%, #a8b3c1 76%, #596777 100%) !important;
-}
-.flip-face-tails > span {
-  background: rgba(255,255,255,.36) !important;
-  border: 1px solid rgba(39,50,68,.20) !important;
-  text-shadow: 0 3px 0 rgba(255,255,255,.62), 0 -2px 0 rgba(15,23,42,.18) !important;
-}
-.flip-coin-shadow {
-  position: absolute !important;
-  left: 50% !important;
-  bottom: -18px !important;
-  width: 68% !important;
-  height: 18px !important;
-  border-radius: 50% !important;
-  transform: translateX(-50%) !important;
-  background: radial-gradient(ellipse at center, rgba(0,0,0,.42) 0%, rgba(0,0,0,.10) 62%, transparent 72%) !important;
-  filter: blur(2px) !important;
-  pointer-events: none !important;
-}
-.flip-coin.is-waiting .flip-coin-inner {
-  animation: flip-ready-isolated 1350ms ease-in-out infinite !important;
-}
-@keyframes flip-ready-isolated {
-  0%, 100% { transform: translate3d(0,0,0) rotateX(5deg) rotateY(-16deg) rotateZ(-1deg); }
-  50%      { transform: translate3d(0,-7px,0) rotateX(-5deg) rotateY(16deg) rotateZ(1deg); }
-}
-.flip-coin.is-tossing .flip-coin-inner {
-  animation: flip-toss-isolated var(--toss-duration, 2800ms) cubic-bezier(.18,.76,.18,1) forwards !important;
-}
-@keyframes flip-toss-isolated {
-  0%   { transform: translate3d(0, 0, 0) rotateX(0deg) rotateY(0deg) rotateZ(0deg) scale(1); }
-  12%  { transform: translate3d(-5px, -28px, 0) rotateX(10deg) rotateY(430deg) rotateZ(-4deg) scale(1.03); }
-  28%  { transform: translate3d(7px, -80px, 0) rotateX(-8deg) rotateY(980deg) rotateZ(4deg) scale(1.06); }
-  46%  { transform: translate3d(-5px, -108px, 0) rotateX(7deg) rotateY(1560deg) rotateZ(-3deg) scale(1.07); }
-  64%  { transform: translate3d(5px, -72px, 0) rotateX(-5deg) rotateY(2140deg) rotateZ(2deg) scale(1.04); }
-  80%  { transform: translate3d(-2px, -22px, 0) rotateX(3deg) rotateY(calc(var(--final-y, 2880deg) - 118deg)) rotateZ(-1deg) scale(1.02); }
-  90%  { transform: translate3d(0, 0, 0) rotateX(0deg) rotateY(calc(var(--final-y, 2880deg) + 12deg)) rotateZ(0deg) scale(1.055, .93); }
-  96%  { transform: translate3d(0, -6px, 0) rotateX(0deg) rotateY(calc(var(--final-y, 2880deg) - 5deg)) rotateZ(0deg) scale(.985, 1.025); }
-  100% { transform: translate3d(0, 0, 0) rotateX(0deg) rotateY(var(--final-y, 2880deg)) rotateZ(0deg) scale(1); }
-}
-.flip-coin.is-tossing .flip-coin-shadow {
-  animation: flip-shadow-isolated var(--toss-duration, 2800ms) cubic-bezier(.18,.76,.18,1) forwards !important;
-}
-@keyframes flip-shadow-isolated {
-  0%, 100% { transform: translateX(-50%) scaleX(1); opacity: .42; }
-  28%      { transform: translateX(-50%) scaleX(.48); opacity: .20; }
-  46%      { transform: translateX(-50%) scaleX(.30); opacity: .12; }
-  76%      { transform: translateX(-50%) scaleX(.72); opacity: .30; }
-  90%      { transform: translateX(-50%) scaleX(.95); opacity: .38; }
-}
-@media (max-height: 740px) {
-  .flip-coin { --flip-size: 162px; }
-  .flip-face { font-size: 70px !important; }
-}
-@media (prefers-reduced-motion: reduce) {
-  .flip-coin.is-waiting .flip-coin-inner,
-  .flip-coin.is-tossing .flip-coin-inner,
-  .flip-coin.is-tossing .flip-coin-shadow {
-    animation: none !important;
-  }
-  .flip-coin.is-tossing .flip-coin-inner {
-    transform: rotateY(var(--final-y, 2880deg)) !important;
-    transition: transform 520ms ease-out !important;
-  }
+/* Float a single theme toggle on the auth screen since there's no topbar. */
+.floating-toggle {
+  position: fixed;
+  right: 14px;
+  top: max(14px, env(safe-area-inset-top, 0px));
+  z-index: 90;
+  width: 42px;
+  height: 42px;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
 }
 
-/* Ensure result-banner win/loss color rules never repaint the side coin. */
-.result-banner .result-banner-coin.static-coin-heads {
-  background:
-    radial-gradient(circle at 30% 22%, rgba(255,255,255,.92) 0 8%, transparent 9%),
-    radial-gradient(circle at 50% 48%, #fff0b6 0 30%, #f7bd26 54%, #b87309 76%, #704500 100%) !important;
-}
-.result-banner .result-banner-coin.static-coin-tails {
-  background:
-    radial-gradient(circle at 30% 22%, rgba(255,255,255,1) 0 8%, transparent 9%),
-    radial-gradient(circle at 50% 48%, #ffffff 0 29%, #e5eaf1 53%, #a8b3c1 76%, #596777 100%) !important;
+/* Old fixed-bottom-right floating toggle — hide it. The topbar owns it now. */
+body[data-view="dashboard"] .floating-toggle { display: none !important; }
+
+/* Avatar letter blob in the lobby rows. */
+.avatar.avatar-letter {
+  display: grid;
+  place-items: center;
+  font-weight: 800;
+  font-size: 14px;
+  color: #fff;
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-deep) 100%);
+  text-transform: uppercase;
 }
 
-/* =====================================================================
-   v0.13 PHYSICAL VERTICAL FLIP
-   ---------------------------------------------------------------------
-   Fixes the modal toss only:
-   - vertical flip on the X axis, no diagonal corkscrew
-   - 1.5s motion
-   - front/back faces are connected by a visible middle rim so there is no
-     see-through gap when the coin is edge-on
-   ===================================================================== */
-.flip-coin {
-  --flip-size: clamp(160px, 52vw, 210px) !important;
-  --flip-depth: clamp(12px, 4vw, 20px) !important;
-  --final-x: 2160deg;
-  perspective: 1800px !important;
+/* Confirm modal styling. */
+.modal.modal-sm { max-width: 420px; }
+.confirm-body {
+  margin: 8px 0 16px;
+  color: var(--text-dim);
+  line-height: 1.5;
 }
-.flip-coin-inner {
-  transform-style: preserve-3d !important;
+.confirm-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+@media (max-width: 480px) {
+  .confirm-actions { grid-template-columns: 1fr; }
+  .confirm-actions .btn { width: 100%; }
 }
 
-/* Solid center slab: it sits between the two faces and becomes the edge
-   when the coin turns sideways, preventing the transparent see-through line. */
-.flip-coin-inner::before {
-  inset: 0 !important;
-  transform: translateZ(0) !important;
-  border-radius: 50% !important;
-  background:
-    radial-gradient(circle at 50% 50%, #f8fafc 0 56%, #cbd5e1 64%, #64748b 83%, #334155 100%) !important;
-  box-shadow:
-    0 0 0 calc(var(--flip-depth) * .72) #94a3b8,
-    0 0 0 var(--flip-depth) #475569,
-    inset 0 0 26px rgba(15,23,42,.35) !important;
-  backface-visibility: visible !important;
-  -webkit-backface-visibility: visible !important;
-}
-
-/* Extra edge strip. This is intentionally a flattened circle in the middle
-   of the coin; when rotating on X it reads as the connected coin wall. */
-.flip-coin-inner::after {
-  content: "" !important;
-  position: absolute !important;
-  inset: 1.25% !important;
-  border-radius: 50% !important;
-  transform: rotateX(90deg) scaleY(.16) !important;
-  background: linear-gradient(180deg, #334155, #f8fafc 48%, #475569) !important;
-  box-shadow:
-    0 0 calc(var(--flip-depth) * 1.25) rgba(15,23,42,.42),
-    inset 0 0 10px rgba(255,255,255,.28) !important;
-  backface-visibility: visible !important;
-  -webkit-backface-visibility: visible !important;
-  pointer-events: none !important;
-}
-
-.flip-face {
-  clip-path: circle(50% at 50% 50%) !important;
-  transform-style: preserve-3d !important;
-}
-.flip-face-heads {
-  transform: translateZ(var(--flip-depth)) !important;
-}
-.flip-face-tails {
-  transform: rotateX(180deg) translateZ(var(--flip-depth)) !important;
-}
-
-.flip-coin.is-waiting .flip-coin-inner {
-  animation: flip-ready-vertical 1200ms ease-in-out infinite !important;
-}
-@keyframes flip-ready-vertical {
-  0%, 100% { transform: translate3d(0,0,0) rotateX(0deg) rotateY(-8deg) rotateZ(0deg); }
-  50%      { transform: translate3d(0,-6px,0) rotateX(8deg) rotateY(8deg) rotateZ(0deg); }
-}
-
-.flip-coin.is-tossing .flip-coin-inner {
-  animation: flip-toss-vertical var(--toss-duration, 1500ms) cubic-bezier(.16,.76,.18,1) forwards !important;
-}
-@keyframes flip-toss-vertical {
-  0%   { transform: translate3d(0, 0, 0) rotateX(0deg) rotateY(0deg) rotateZ(0deg) scale(1); }
-  12%  { transform: translate3d(0, -36px, 0) rotateX(420deg) rotateY(0deg) rotateZ(0deg) scale(1.025); }
-  30%  { transform: translate3d(0, -104px, 0) rotateX(900deg) rotateY(0deg) rotateZ(0deg) scale(1.055); }
-  52%  { transform: translate3d(0, -122px, 0) rotateX(1440deg) rotateY(0deg) rotateZ(0deg) scale(1.06); }
-  72%  { transform: translate3d(0, -52px, 0) rotateX(calc(var(--final-x, 2160deg) - 170deg)) rotateY(0deg) rotateZ(0deg) scale(1.025); }
-  86%  { transform: translate3d(0, 0, 0) rotateX(calc(var(--final-x, 2160deg) + 10deg)) rotateY(0deg) rotateZ(0deg) scale(1.045, .94); }
-  94%  { transform: translate3d(0, -7px, 0) rotateX(calc(var(--final-x, 2160deg) - 4deg)) rotateY(0deg) rotateZ(0deg) scale(.99, 1.025); }
-  100% { transform: translate3d(0, 0, 0) rotateX(var(--final-x, 2160deg)) rotateY(0deg) rotateZ(0deg) scale(1); }
-}
-
-.flip-coin.is-tossing .flip-coin-shadow {
-  animation: flip-shadow-vertical var(--toss-duration, 1500ms) cubic-bezier(.16,.76,.18,1) forwards !important;
-}
-@keyframes flip-shadow-vertical {
-  0%, 100% { transform: translateX(-50%) scaleX(1); opacity: .42; }
-  30%      { transform: translateX(-50%) scaleX(.48); opacity: .20; }
-  52%      { transform: translateX(-50%) scaleX(.30); opacity: .12; }
-  76%      { transform: translateX(-50%) scaleX(.78); opacity: .30; }
-  86%      { transform: translateX(-50%) scaleX(.96); opacity: .38; }
-}
-@media (prefers-reduced-motion: reduce) {
-  .flip-coin.is-tossing .flip-coin-inner {
-    transform: rotateX(var(--final-x, 2160deg)) !important;
-    transition: transform 420ms ease-out !important;
-  }
-}
+/* Hide native theme toggle if we still have one floating */
+body[data-view="dashboard"] .theme-toggle:not(.icon-btn) { display: none !important; }

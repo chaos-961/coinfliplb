@@ -1,6 +1,23 @@
-# Coinflip LB
+# Coinflip LB (v0.9)
 
 A clean, full-stack **fake-money** coinflip game. Players sign up, get $100 of play money, create heads/tails wagers, and watch a fair, server-decided coin flip animation. Pure-fun MVP — no real money, no crypto, no gambling integrations.
+
+## What's new in v0.9
+
+- Backend security hardening: `helmet` headers, real bcrypt timing-safe dummy hash, per-username login throttle, per-IP create-game throttle, password length cap, password length min/max validation, JWT no longer ships username in payload, JWT validated against fresh DB rows.
+- Wager and balance limits tightened: `MAX_WAGER` is now `1,000,000`, balances capped at `1,000,000,000` to keep the leaderboard stable.
+- Each player can hold at most **5 open games** at a time (configurable).
+- Stale open games auto-cancel after `OPEN_GAME_TTL_HOURS` (default 48h) and refund the creator.
+- DB-pinging `/health` endpoint, graceful `SIGTERM` shutdown, request IDs in logs.
+- Public leaderboard (no auth required).
+- New `/api/config` endpoint so the frontend reflects backend limits without redeploys.
+- Composite indexes on `games(status, created_at)` and `games(status, wager)`.
+- Frontend: Web Audio sound effects (mute toggle in topbar), creator-side flip animation, in-app confirm modal (replaces native `confirm()`), confirmation prompts on big wagers, SVG icon buttons, avatar letter blobs.
+
+> **Action required for existing deployments:**
+> 1. Run `ALTER` migrations from `schema.sql` (or just re-run `init-db` — `CREATE INDEX IF NOT EXISTS` is idempotent).
+> 2. Set `FRONTEND_ORIGIN` (now supports comma-separated list).
+> 3. `npm install` to pick up `helmet`.
 
 ---
 

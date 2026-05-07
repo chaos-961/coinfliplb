@@ -1,6 +1,6 @@
 {
   "name": "coinflip-arena-backend",
-  "version": "1.0.0",
+  "version": "0.9.0",
   "description": "Backend API for Coinflip LB - a fake-money coinflip game.",
   "main": "server.js",
   "scripts": {
@@ -17,6 +17,7 @@
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
     "express-rate-limit": "^7.4.0",
+    "helmet": "^7.1.0",
     "jsonwebtoken": "^9.0.2",
     "pg": "^8.12.0"
   }

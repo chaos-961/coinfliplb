@@ -1,5 +1,5 @@
 -- =====================================================================
--- Coinflip LB - PostgreSQL schema
+-- Coinflip LB - PostgreSQL schema (v0.9)
 -- ---------------------------------------------------------------------
 -- Run this once against your Railway PostgreSQL database to create the
 -- tables. See backend/README.md for instructions.
@@ -28,10 +28,14 @@ CREATE TABLE IF NOT EXISTS games (
 );
 
 -- Helpful indexes for the queries we run most.
-CREATE INDEX IF NOT EXISTS idx_games_status     ON games(status);
-CREATE INDEX IF NOT EXISTS idx_games_creator    ON games(creator_id);
-CREATE INDEX IF NOT EXISTS idx_games_created_at ON games(created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_users_balance    ON users(balance DESC);
+CREATE INDEX IF NOT EXISTS idx_games_status         ON games(status);
+CREATE INDEX IF NOT EXISTS idx_games_creator        ON games(creator_id);
+CREATE INDEX IF NOT EXISTS idx_games_joiner         ON games(joiner_id);
+CREATE INDEX IF NOT EXISTS idx_games_created_at     ON games(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_games_completed_at   ON games(completed_at DESC);
+CREATE INDEX IF NOT EXISTS idx_games_status_created ON games(status, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_games_status_wager   ON games(status, wager);
+CREATE INDEX IF NOT EXISTS idx_users_balance        ON users(balance DESC);
 
 -- Migration for existing deployments created with older decimal columns:
 -- ALTER TABLE users ALTER COLUMN balance TYPE NUMERIC(20,0) USING FLOOR(balance);
