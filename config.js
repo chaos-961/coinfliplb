@@ -14,7 +14,8 @@ window.CONFIG = Object.freeze({
 
   // Coin toss animation length (ms). Hard-clamped in the JS to keep
   // the result modal from feeling either jittery or sluggish.
-  DEFAULT_FLIP_DURATION_MS: 4200,
+  // 1.5s default with v0.13's vertical-flip motion — fast and readable.
+  DEFAULT_FLIP_DURATION_MS: 1500,
 
   // The polling fallback used when WebSockets / SSE are unavailable.
   // The real "watcher" interval is shorter and lives in app.js.

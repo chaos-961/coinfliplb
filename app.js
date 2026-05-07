@@ -29,7 +29,6 @@
   const SFX_KEY   = 'cfa_sfx';
   const SEEN_COMPLETED_PREFIX = 'cfa_seen_completed_';
   const PENDING_CREATED_PREFIX = 'cfa_pending_created_';
-  const RESULT_CHECK_INTERVAL_MS = 7000;
 
   function loadSfxPref() {
     const stored = localStorage.getItem(SFX_KEY);
@@ -48,7 +47,6 @@
     pageSize:       { lobby: 20, my: 20, leaderboard: 20 },
     isFlipping:     false,
     pollTimer:      null,
-    resultPollTimer:null,
     pollTick:       0,
     bannerTimer:    null,
     seenCompletedIds: null,
@@ -467,14 +465,23 @@
   function getBalanceTone(balance) {
     const n = Math.max(0, Math.floor(Number(balance) || 0));
     if (n >= 10000) return { key: 'b-white', bg: '#f8fafc', fg: '#0f172a', glow: 'rgba(248, 250, 252, 0.34)' };
-    if (n >= 5000)  return { key: 'b-5000',  bg: '#f59e0b', fg: '#1f1300', glow: 'rgba(245, 158, 11, 0.46)' };
     if (n >= 2000)  return { key: 'b-2000',  bg: '#d946ef', fg: '#fff7ff', glow: 'rgba(217, 70, 239, 0.42)' };
-    if (n >= 1000)  return { key: 'b-1000',  bg: '#8b5cf6', fg: '#ffffff', glow: 'rgba(139, 92, 246, 0.45)' };
-    if (n >= 500)   return { key: 'b-500',   bg: '#3b82f6', fg: '#eff6ff', glow: 'rgba(59, 130, 246, 0.42)' };
-    if (n >= 300)   return { key: 'b-300',   bg: '#06b6d4', fg: '#ecfeff', glow: 'rgba(6, 182, 212, 0.40)' };
+    if (n >= 1500)  return { key: 'b-1500',  bg: '#8b5cf6', fg: '#ffffff', glow: 'rgba(139, 92, 246, 0.45)' };
+    if (n >= 1000)  return { key: 'b-1000',  bg: '#3b82f6', fg: '#eff6ff', glow: 'rgba(59, 130, 246, 0.42)' };
+    if (n >= 500)   return { key: 'b-500',   bg: '#06b6d4', fg: '#ecfeff', glow: 'rgba(6, 182, 212, 0.40)' };
+    if (n >= 400)   return { key: 'b-400',   bg: '#14b8a6', fg: '#ecfdf5', glow: 'rgba(20, 184, 166, 0.38)' };
+    if (n >= 300)   return { key: 'b-300',   bg: '#22c55e', fg: '#052e16', glow: 'rgba(34, 197, 94, 0.38)' };
     if (n >= 200)   return { key: 'b-200',   bg: '#84cc16', fg: '#1a2e05', glow: 'rgba(132, 204, 22, 0.38)' };
-    if (n >= 100)   return { key: 'b-100',   bg: '#22c55e', fg: '#052e16', glow: 'rgba(34, 197, 94, 0.42)' };
-    if (n > 0)      return { key: 'b-low',   bg: '#ef4444', fg: '#fff1f2', glow: 'rgba(239, 68, 68, 0.42)' };
+    if (n >= 100)   return { key: 'b-100',   bg: '#facc15', fg: '#422006', glow: 'rgba(250, 204, 21, 0.40)' };
+    if (n > 0) {
+      const t = Math.min(1, n / 100);
+      return {
+        key: 'b-low',
+        bg: `color-mix(in srgb, #ef4444 ${Math.round(100 - t * 48)}%, #22c55e ${Math.round(t * 52)}%)`,
+        fg: '#fff7ed',
+        glow: 'rgba(245, 158, 11, 0.32)'
+      };
+    }
     return { key: 'b-zero', bg: '#ef4444', fg: '#fff1f2', glow: 'rgba(239, 68, 68, 0.42)' };
   }
 
@@ -922,23 +929,18 @@
       if (document.hidden || state.isFlipping || !state.user) return;
       state.pollTick += 1;
 
+      // refreshMyGames runs completion detection internally, which is what
+      // drives the result banner and creator-side flip animation.
       refreshMyGames({ silent: true, forNotification: true }).catch(() => {});
 
       if (state.activeMainTab === 'lobby') refreshOpenGames({ silent: true }).catch(() => {});
       if (state.activeMainTab === 'leaderboard' && state.pollTick % 6 === 0) refreshLeaderboard({ silent: true }).catch(() => {});
       refreshMe().catch(() => {});
     }, Math.max(2500, Number(CONFIG.POLLING_INTERVAL_MS) || 4000));
-
-    state.resultPollTimer = setInterval(() => {
-      if (document.hidden || state.isFlipping || !state.user) return;
-      refreshCompletedNotifications({ silent: true }).catch(() => {});
-    }, RESULT_CHECK_INTERVAL_MS);
   }
   function stopPolling() {
     if (state.pollTimer) clearInterval(state.pollTimer);
-    if (state.resultPollTimer) clearInterval(state.resultPollTimer);
     state.pollTimer = null;
-    state.resultPollTimer = null;
   }
 
   async function refreshOwnOpenGamesCount() {
@@ -1018,10 +1020,15 @@
         avatar.classList.add('avatar-letter');
       }
 
-      const coin = $('.coin', node);
-      if (g.creator_choice === 'tails') {
-        const inner = $('.coin-inner', coin);
-        if (inner) inner.style.transform = 'rotateY(180deg)';
+      // Static coin face for the creator's pick. Do NOT use the animated 3D coin
+      // here; it has depth/rim pseudo-elements that overlap at small sizes.
+      const pickCoin = $('.game-pick-coin', node);
+      if (pickCoin) {
+        const side = (g.creator_choice === 'tails') ? 'tails' : 'heads';
+        pickCoin.classList.toggle('static-coin-heads', side === 'heads');
+        pickCoin.classList.toggle('static-coin-tails', side === 'tails');
+        const coinText = pickCoin.querySelector('span');
+        if (coinText) coinText.textContent = side === 'heads' ? 'H' : 'T';
       }
       $('.pick-label', node).textContent = capitalize(g.creator_choice);
       $('.game-row-wager', node).textContent = formatMoney(g.wager);
@@ -1101,7 +1108,8 @@
       } else if (state.activeMainTab === 'my' && page === state.pages.my && !options.forOpenCount) {
         renderMyGames(games);
       }
-      if (options.detectCompletions && !options.forOpenCount) processCompletionDetection(games);
+      // Always run completion detection unless this call is purely a count probe.
+      if (!options.forOpenCount) processCompletionDetection(games, options);
     } catch (err) {
       console.warn('[refreshMyGames]', err);
       if (!options.silent && !options.forNotification) setListLoading('my', true, 'Could not load your games.', true);
@@ -1275,6 +1283,15 @@
 
     els.resultBanner.classList.remove('is-win', 'is-loss');
     els.resultBanner.classList.add(won ? 'is-win' : 'is-loss');
+
+    // Show the actual landed side with the same isolated static coin used in the picker.
+    if (els.resultBannerCoin) {
+      const side = (g.result === 'tails') ? 'tails' : 'heads';
+      els.resultBannerCoin.classList.toggle('static-coin-heads', side === 'heads');
+      els.resultBannerCoin.classList.toggle('static-coin-tails', side === 'tails');
+      const coinText = els.resultBannerCoin.querySelector('span');
+      if (coinText) coinText.textContent = side === 'heads' ? 'H' : 'T';
+    }
 
     els.resultBannerTitle.textContent = won
       ? `You won ${formatMoney(wager * 2)}!`
@@ -1551,6 +1568,7 @@
     if (els.flipSub) els.flipSub.textContent = sub || 'Server is choosing the result…';
     const inner = els.flipCoinInner;
     inner.style.removeProperty('--final-y');
+    inner.style.removeProperty('--final-x');
     inner.style.removeProperty('--toss-duration');
     inner.style.transform = '';
     els.flipCoin.classList.remove('is-tossing');
@@ -1565,11 +1583,17 @@
       const inner = els.flipCoinInner;
       const coin  = els.flipCoin;
 
-      const finalY = (result === 'heads') ? '1440deg' : '1620deg';
-      const configuredDuration = Number(CONFIG.DEFAULT_FLIP_DURATION_MS) || 4200;
-      const dur = Math.min(Math.max(configuredDuration, 4200), 5400);
+      // X-axis rotation for the v0.13 physical vertical flip.
+      // Heads = even number of half-turns (lands face up).
+      // Tails = odd number of half-turns.
+      const finalX = (result === 'heads') ? '2160deg' : '2340deg';
+      // Fast readable vertical flip: about 1.5s of motion, then result.
+      const configuredDuration = Number(CONFIG.DEFAULT_FLIP_DURATION_MS) || 1500;
+      const dur = Math.min(Math.max(configuredDuration, 1350), 1650);
 
-      inner.style.setProperty('--final-y', finalY);
+      inner.style.setProperty('--final-x', finalX);
+      // Keep the legacy variable updated too so older fallback CSS never lands wrong.
+      inner.style.setProperty('--final-y', (result === 'heads') ? '2880deg' : '3060deg');
       inner.style.setProperty('--toss-duration', `${dur}ms`);
       coin.style.setProperty('--toss-duration', `${dur}ms`);
 
@@ -1725,17 +1749,18 @@
       }
     });
 
-    const refreshAfterReturn = () => {
+    // Refresh data when the tab becomes visible again. Browsers pause
+    // timers in hidden tabs, so we want to catch up on completions, balance,
+    // and the visible list as soon as the user returns.
+    on(document, 'visibilitychange', () => {
+      if (document.hidden) return;
       if (!state.user || state.isFlipping) return;
       refreshCompletedNotifications({ silent: true }).catch(() => {});
       refreshMe().catch(() => {});
       refreshMyGames({ forNotification: true, silent: true }).catch(() => {});
       refreshOpenGames({ silent: true }).catch(() => {});
       if (state.activeMainTab === 'leaderboard') refreshLeaderboard({ silent: true }).catch(() => {});
-    };
-    on(document, 'visibilitychange', () => { if (!document.hidden) refreshAfterReturn(); });
-    on(window, 'focus', refreshAfterReturn);
-    on(window, 'pageshow', refreshAfterReturn);
+    });
   }
 
   // -------------------------------------------------------------------

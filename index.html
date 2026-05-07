@@ -76,12 +76,7 @@
     <section class="view view-auth" id="view-auth">
       <div class="auth-card">
         <div class="auth-coin-deco" aria-hidden="true">
-          <div class="coin coin-md idle-spin">
-            <div class="coin-inner">
-              <div class="coin-face coin-heads"><span>H</span></div>
-              <div class="coin-face coin-tails"><span>T</span></div>
-            </div>
-          </div>
+          <div class="static-coin static-coin-md static-coin-heads"><span>H</span></div>
         </div>
 
         <h1 class="auth-title">Coinflip LB</h1>
@@ -174,7 +169,7 @@
 
       <!-- Result banner: shows when one of the user's open games has just been joined -->
       <div class="result-banner" id="result-banner" hidden role="status" aria-live="polite">
-        <div class="result-banner-coin" id="result-banner-coin" aria-hidden="true"></div>
+        <div class="static-coin static-coin-sm result-banner-coin" id="result-banner-coin" aria-hidden="true"><span>H</span></div>
         <div class="result-banner-text">
           <div class="result-banner-title" id="result-banner-title">—</div>
           <div class="result-banner-sub" id="result-banner-sub">—</div>
@@ -204,24 +199,14 @@
             <label class="choice-card">
               <input type="radio" name="choice" value="heads" />
               <div class="choice-content">
-                <div class="coin coin-sm">
-                  <div class="coin-inner">
-                    <div class="coin-face coin-heads"><span>H</span></div>
-                    <div class="coin-face coin-tails"><span>T</span></div>
-                  </div>
-                </div>
+                <div class="static-coin static-coin-choice static-coin-heads" aria-hidden="true"><span>H</span></div>
                 <span class="choice-label">Heads</span>
               </div>
             </label>
             <label class="choice-card">
               <input type="radio" name="choice" value="tails" />
               <div class="choice-content">
-                <div class="coin coin-sm coin-flipped-base">
-                  <div class="coin-inner">
-                    <div class="coin-face coin-heads"><span>H</span></div>
-                    <div class="coin-face coin-tails"><span>T</span></div>
-                  </div>
-                </div>
+                <div class="static-coin static-coin-choice static-coin-tails" aria-hidden="true"><span>T</span></div>
                 <span class="choice-label">Tails</span>
               </div>
             </label>
@@ -343,12 +328,12 @@
       <h2 id="flip-title" class="flip-title">Flipping the coin…</h2>
 
       <div class="flip-stage">
-        <div class="coin coin-xl" id="flip-coin" aria-hidden="true">
-          <div class="coin-inner" id="flip-coin-inner">
-            <div class="coin-face coin-heads"><span>H</span></div>
-            <div class="coin-face coin-tails"><span>T</span></div>
+        <div class="flip-coin" id="flip-coin" aria-hidden="true">
+          <div class="flip-coin-inner" id="flip-coin-inner">
+            <div class="flip-face flip-face-heads"><span>H</span></div>
+            <div class="flip-face flip-face-tails"><span>T</span></div>
           </div>
-          <div class="coin-shadow"></div>
+          <div class="flip-coin-shadow"></div>
         </div>
       </div>
 
@@ -394,12 +379,7 @@
         </div>
       </div>
       <div class="game-row-pick">
-        <div class="coin coin-xs">
-          <div class="coin-inner">
-            <div class="coin-face coin-heads"><span>H</span></div>
-            <div class="coin-face coin-tails"><span>T</span></div>
-          </div>
-        </div>
+        <div class="static-coin static-coin-xs game-pick-coin" aria-hidden="true"><span>H</span></div>
         <span class="pick-label"></span>
       </div>
       <div class="game-row-wager"></div>
