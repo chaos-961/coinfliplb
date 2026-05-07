@@ -811,8 +811,8 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
     0 0 0 2px rgba(60, 65, 85, 0.5);
 }
 
-.coin-tails span {
-  transform: rotateY(180deg);
+.coin-tails.static-tail {
+  transform: none;
 }
 
 .coin-flipped-base .coin-inner { transform: rotateY(180deg); }
