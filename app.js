@@ -1303,8 +1303,9 @@
       // Tails = odd number of half-turns. Multiply by 360 for a clean
       // multi-rotation finish, then add 180 for tails.
       const finalY = (result === 'heads') ? '2880deg' : '3060deg';
-      const configuredDuration = Number(CONFIG.DEFAULT_FLIP_DURATION_MS) || 4200;
-      const dur = Math.min(Math.max(configuredDuration, 3400), 5200);
+      // Keep the flip short and readable; long spins make the back face look muddy.
+      const configuredDuration = Number(CONFIG.DEFAULT_FLIP_DURATION_MS) || 2800;
+      const dur = Math.min(Math.max(configuredDuration, 2300), 3400);
 
       inner.style.setProperty('--final-y', finalY);
       inner.style.setProperty('--toss-duration', `${dur}ms`);
