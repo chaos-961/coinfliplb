@@ -1,15 +1,18 @@
 /* =====================================================================
-   Coinflip Gold — app.js (v0.9.4)
+   Coinflip Gold — app.js (v1.1)
    ---------------------------------------------------------------------
    Single-file SPA logic. No frameworks.
    - Inline feedback (no toast popups)
-   - Auth view default, with confirm-password on signup
+   - Auth view default, with confirm-password on signup (+ optional email)
    - Dashboard with tabs: Open games / My games / Leaderboard
    - Result banner when one of the user's open games is joined+completed
    - Multi-stage 3D coin flip animation
    - Creator-side flip animation when their game is joined
    - In-app confirm modal (no native confirm())
+   - Provably-fair modal (commit/reveal explanation + per-game verifier)
    - Runtime config pulled from /api/config
+   - 0-balance users CAN cancel their own open games (only create/join blocked)
+   - Locked-Gold pill shows escrowed total when the user has open games
    ===================================================================== */
 (function () {
   'use strict';
@@ -68,6 +71,7 @@
     pendingCreatedGameIds: null,
     lastBannerGameId: null,
     ownOpenGamesCount: null,
+    ownLockedGold:    0,           // v1.1: total Gold escrowed in this user's open games
     theme:          localStorage.getItem(THEME_KEY) || 'dark',
     runtimeConfig:  null,
   };
@@ -142,6 +146,7 @@
       loginUsername:    $('#login-username'),
       loginPassword:    $('#login-password'),
       signupUsername:   $('#signup-username'),
+      signupEmail:      $('#signup-email'),
       signupPassword:   $('#signup-password'),
       signupConfirm:    $('#signup-confirm'),
       passwordMeter:   $('#password-meter'),
@@ -151,6 +156,17 @@
       signupBtn:        $('#signup-btn'),
       loginFeedback:    $('#login-feedback'),
       signupFeedback:   $('#signup-feedback'),
+
+      // v1.1: locked-gold display + provably-fair UI
+      lockedPill:        $('#locked-pill'),
+      lockedValue:       $('#locked-value'),
+      pfOpenBtn:         $('#pf-open-btn'),
+      pfFooterLink:      $('#footer-pf-link'),
+      pfModal:           $('#pf-modal'),
+      pfClose:           $('#pf-close'),
+      pfGameInput:       $('#pf-game-input'),
+      pfGameVerifyBtn:   $('#pf-verify-btn'),
+      pfResult:          $('#pf-result'),
 
       resultBanner:      $('#result-banner'),
       resultBannerCoin:  $('#result-banner-coin'),
@@ -626,6 +642,136 @@
   }
 
   // -------------------------------------------------------------------
+  // Provably-fair verifier (v1.1)
+  // ---------------------------------------------------------------------
+  // Mirrors the server's algorithm so users can confirm — entirely in
+  // their own browser — that a completed game's outcome was determined
+  // by the seeds we committed to.
+  //
+  // 1. SHA-256(server_seed) must equal server_seed_hash (committed before).
+  // 2. HMAC-SHA-256(server_seed, "<client_seed>:<game_id>"); first byte's
+  //    low bit selects heads (0) or tails (1).
+  // -------------------------------------------------------------------
+  async function pfSha256Hex(value) {
+    const enc = new TextEncoder().encode(String(value || ''));
+    const buf = await crypto.subtle.digest('SHA-256', enc);
+    return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+  }
+  async function pfHmacSha256Hex(key, message) {
+    const enc = new TextEncoder();
+    const cryptoKey = await crypto.subtle.importKey(
+      'raw', enc.encode(String(key)), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
+    );
+    const sig = await crypto.subtle.sign('HMAC', cryptoKey, enc.encode(String(message)));
+    return Array.from(new Uint8Array(sig)).map(b => b.toString(16).padStart(2, '0')).join('');
+  }
+  async function pfRecomputeFlip(serverSeed, clientSeed, gameId) {
+    const digest = await pfHmacSha256Hex(serverSeed, `${clientSeed}:${gameId}`);
+    return (parseInt(digest.slice(0, 2), 16) & 1) === 0 ? 'heads' : 'tails';
+  }
+  async function pfVerifyGame(gameId) {
+    const id = Number(gameId);
+    if (!Number.isSafeInteger(id) || id <= 0) {
+      return { ok: false, message: 'Enter a valid completed game ID.' };
+    }
+    let game;
+    try {
+      const data = await api(`/api/games/${id}`);
+      game = data.game;
+    } catch (err) {
+      return { ok: false, message: err.message || 'Could not fetch the game.' };
+    }
+    if (!game || game.status !== 'completed') {
+      return { ok: false, message: 'That game has not been resolved yet.' };
+    }
+    if (!game.server_seed || !game.server_seed_hash || !game.client_seed || game.nonce == null) {
+      return { ok: false, message: 'This game is missing provably-fair fields (older game).' };
+    }
+    const recomputedHash = await pfSha256Hex(game.server_seed);
+    const recomputedResult = await pfRecomputeFlip(game.server_seed, game.client_seed, game.nonce);
+    const hashOk = recomputedHash === game.server_seed_hash;
+    const resultOk = recomputedResult === game.result;
+    return {
+      ok: hashOk && resultOk,
+      hashOk,
+      resultOk,
+      gameId: id,
+      algorithm: game.pf_algo || 'hmac-sha256(server_seed, client_seed:game_id)/v1',
+      serverSeed: game.server_seed,
+      serverSeedHash: game.server_seed_hash,
+      clientSeed: game.client_seed,
+      nonce: Number(game.nonce),
+      storedResult: game.result,
+      recomputedResult,
+      message: (hashOk && resultOk)
+        ? 'Verified. The committed seed matches and the flip is reproducible.'
+        : (!hashOk ? 'Hash mismatch — server seed does not match the committed hash.'
+                   : 'Result mismatch — recomputed flip differs from the stored result.'),
+    };
+  }
+
+  function openPfModal(prefilledGameId) {
+    if (!els.pfModal) return;
+    els.pfModal.hidden = false;
+    els.pfModal.setAttribute('aria-hidden', 'false');
+    if (els.pfGameInput && prefilledGameId) {
+      els.pfGameInput.value = String(prefilledGameId);
+    }
+    if (els.pfResult) els.pfResult.textContent = '';
+    setTimeout(() => { if (els.pfGameInput) els.pfGameInput.focus(); }, 30);
+  }
+  function closePfModal() {
+    if (!els.pfModal) return;
+    els.pfModal.hidden = true;
+    els.pfModal.setAttribute('aria-hidden', 'true');
+  }
+  async function handlePfVerifyClick() {
+    if (!els.pfGameInput || !els.pfResult) return;
+    const id = els.pfGameInput.value.trim();
+    els.pfResult.textContent = 'Verifying…';
+    els.pfResult.classList.remove('is-ok', 'is-bad');
+    const out = await pfVerifyGame(id);
+    if (!out || out.message === undefined) {
+      els.pfResult.textContent = 'Could not verify.';
+      return;
+    }
+    els.pfResult.classList.toggle('is-ok', !!out.ok);
+    els.pfResult.classList.toggle('is-bad', !out.ok);
+    if (!out.serverSeed) {
+      els.pfResult.textContent = out.message;
+      return;
+    }
+    // Show full details so a curious user can reproduce the result by hand.
+    els.pfResult.innerHTML = '';
+    const lines = [
+      ['Status',         out.message],
+      ['Algorithm',      out.algorithm],
+      ['Game ID',        String(out.gameId)],
+      ['Server seed',    out.serverSeed],
+      ['Server seed hash', out.serverSeedHash],
+      ['Client seed',    out.clientSeed],
+      ['Nonce',          String(out.nonce)],
+      ['Stored result',  out.storedResult],
+      ['Recomputed',     out.recomputedResult],
+      ['Hash matches',   out.hashOk ? 'yes' : 'NO'],
+      ['Result matches', out.resultOk ? 'yes' : 'NO'],
+    ];
+    for (const [k, v] of lines) {
+      const row = document.createElement('div');
+      row.className = 'pf-line';
+      const key = document.createElement('span');
+      key.className = 'pf-key';
+      key.textContent = k;
+      const val = document.createElement('span');
+      val.className = 'pf-val';
+      val.textContent = v;
+      row.appendChild(key);
+      row.appendChild(val);
+      els.pfResult.appendChild(row);
+    }
+  }
+
+  // -------------------------------------------------------------------
   // Confirm modal (replaces window.confirm)
   // -------------------------------------------------------------------
   let confirmResolver = null;
@@ -660,6 +806,23 @@
     return Number(state.ownOpenGamesCount) > 0;
   }
 
+  // v1.1: Topbar pill showing how much Gold is currently locked in the
+  // user's open games (escrow). Hidden when nothing is locked. Renders
+  // even when the user has 0 spendable Gold so they understand WHY
+  // they can't create a new game.
+  function updateLockedPill() {
+    if (!els.lockedPill) return;
+    const locked = Math.max(0, Math.floor(Number(state.ownLockedGold) || 0));
+    if (!state.user || locked <= 0) {
+      els.lockedPill.hidden = true;
+      return;
+    }
+    els.lockedPill.hidden = false;
+    if (els.lockedValue) els.lockedValue.textContent = `${formatMoney(locked)} locked`;
+    els.lockedPill.title = `${formatMoney(locked)} reserved in your open games. Cancel a game to free it up.`;
+    els.lockedPill.setAttribute('aria-label', els.lockedPill.title);
+  }
+
   function isEliminated() {
     if (!state.user) return false;
     const balance = Number(state.user.balance);
@@ -673,9 +836,10 @@
     document.body.classList.toggle('is-eliminated', lost);
     if (els.lostCard) els.lostCard.hidden = !lost;
 
+    // v1.1: cancel is allowed even at 0 Gold; only create/join are locked.
     if (els.createFeedback && lost) {
-      showFeedback(els.createFeedback, 'You Lost! You can still view games and the leaderboard, but you cannot create, join, or cancel games.', 'error');
-    } else if (els.createFeedback && !lost && els.createFeedback.textContent.includes('You Lost!')) {
+      showFeedback(els.createFeedback, 'You reached 0 Gold. You can still browse games and the leaderboard. To play again, sign out and create a new account, or cancel an open game if you have one.', 'error');
+    } else if (els.createFeedback && !lost && /You reached 0 Gold|You Lost!/.test(els.createFeedback.textContent || '')) {
       clearFeedback(els.createFeedback);
     }
   }
@@ -825,6 +989,7 @@
     if (!signedIn) {
       if (els.topbar) els.topbar.hidden = true;
       if (els.balancePill) els.balancePill.hidden = true;
+      if (els.lockedPill) els.lockedPill.hidden = true;
       if (els.userName) els.userName.hidden = true;
       if (els.onlinePill) els.onlinePill.hidden = true;
       if (els.logoutBtn) els.logoutBtn.hidden = true;
@@ -841,6 +1006,7 @@
     els.userName.textContent = state.user.username;
     if (els.onlinePill) els.onlinePill.hidden = false;
     els.logoutBtn.hidden = false;
+    updateLockedPill();
     updateWagerLimitUI();
     applyEliminatedState();
   }
@@ -903,11 +1069,19 @@
     clearFeedback(els.signupFeedback);
 
     const username = (els.signupUsername.value || '').trim();
+    const email    = (els.signupEmail && els.signupEmail.value ? els.signupEmail.value : '').trim();
     const password = els.signupPassword.value || '';
     const confirm  = els.signupConfirm.value  || '';
 
-    if (!/^[a-zA-Z0-9_.\-]{3,32}$/.test(username)) {
-      showFeedback(els.signupFeedback, 'Username must be 3–32 characters: letters, numbers, dot, underscore, or hyphen.', 'error');
+    // Frontend validation mirrors the backend's stricter rules so the
+    // user gets the message instantly, but the server is the source of
+    // truth — never trust this alone.
+    if (!/^[a-zA-Z0-9](?:[a-zA-Z0-9_.\-]*[a-zA-Z0-9])?$/.test(username) || username.length < 3 || username.length > 32 || /[._-]{2,}/.test(username)) {
+      showFeedback(els.signupFeedback, "Username must be 3–32 characters using letters, numbers, _, ., or -. It can't start/end with those symbols or include runs of them.", 'error');
+      return;
+    }
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      showFeedback(els.signupFeedback, 'That email address looks invalid. (Email is optional — leave it blank to skip.)', 'error');
       return;
     }
     const minPasswordLength = getMinPasswordLength();
@@ -927,9 +1101,11 @@
 
     setLoading(els.signupBtn, true);
     try {
+      const body = { username, password };
+      if (email) body.email = email;
       const data = await api('/api/auth/signup', {
         method: 'POST',
-        body: JSON.stringify({ username, password }),
+        body: JSON.stringify(body),
       });
       setSession(data.token, data.user);
       enterDashboard();
@@ -1075,12 +1251,19 @@
   async function refreshOwnOpenGamesCount() {
     if (!state.user) {
       state.ownOpenGamesCount = null;
+      state.ownLockedGold = 0;
       return 0;
     }
     try {
-      const data = await api('/api/me/games?status=open&page=1&limit=1');
+      // Pull up to MAX_OPEN_GAMES_PER_USER (5 by default) so we can sum
+      // their wagers and show a "Locked" pill in the topbar. The total
+      // returned by the API is authoritative for the count.
+      const data = await api('/api/me/games?status=open&page=1&limit=10');
       const count = Number(data.total);
       state.ownOpenGamesCount = Number.isFinite(count) ? count : ((data.games || []).length);
+      const locked = (data.games || []).reduce((sum, g) => sum + Number(g.wager || 0), 0);
+      state.ownLockedGold = Number.isFinite(locked) ? locked : 0;
+      updateLockedPill();
       return state.ownOpenGamesCount;
     } catch (err) {
       console.warn('[refreshOwnOpenGamesCount]', err);
@@ -1283,15 +1466,13 @@
         detail.appendChild(txt);
         amount.textContent = formatMoney(wager);
         amount.classList.add('is-pending');
+        // v1.1: cancel must work even at 0 Gold — it's the only way
+        // for an "eliminated" player to free their escrowed Gold.
         if (isCreator && cancelBtn) {
           cancelBtn.hidden = false;
-          if (isEliminated()) {
-            cancelBtn.disabled = true;
-            cancelBtn.textContent = 'Locked';
-            cancelBtn.title = 'You cannot cancel games after reaching 0 Gold.';
-          } else {
-            on(cancelBtn, 'click', () => handleCancelGame(g.id, cancelBtn));
-          }
+          cancelBtn.disabled = false;
+          cancelBtn.title = 'Cancel this game and refund your wager.';
+          on(cancelBtn, 'click', () => handleCancelGame(g.id, cancelBtn));
         }
       } else if (g.status === 'completed') {
         const won = (g.winner_id === myId);
@@ -1584,12 +1765,13 @@
 
   // -------------------------------------------------------------------
   // Cancel game
-  // -------------------------------------------------------------------
+  // ---------------------------------------------------------------------
+  // v1.1: A user with 0 spendable Gold MUST still be able to cancel
+  // their own open games (they're cancelling THEIR escrow, which gives
+  // them Gold back — this is the user's escape hatch from being locked
+  // at 0). The previous version blocked this with `isEliminated()`.
+  // The server has always allowed it; the bug was purely UI.
   async function handleCancelGame(gameId, btn) {
-    if (isEliminated()) {
-      showFeedback(els.createFeedback, 'You Lost! You cannot cancel games.', 'error');
-      return;
-    }
     if (!gameId) return;
     const finishAction = beginClientAction(`cancel-game:${gameId}`, CLIENT_ACTION_COOLDOWNS.cancel, 'Cancelling too fast');
     if (!finishAction) return;
@@ -1920,6 +2102,17 @@
     on(document, 'keydown', (e) => {
       if (e.key === 'Escape' && els.profileModal && !els.profileModal.hidden) closeProfileModal();
       if (e.key === 'Escape' && !els.confirmModal.hidden) closeConfirmModal(false);
+      if (e.key === 'Escape' && els.pfModal && !els.pfModal.hidden) closePfModal();
+    });
+
+    // Provably-fair modal (v1.1) — wires up only if the elements exist.
+    if (els.pfOpenBtn) on(els.pfOpenBtn, 'click', () => openPfModal());
+    if (els.pfFooterLink) on(els.pfFooterLink, 'click', () => openPfModal());
+    if (els.pfClose)   on(els.pfClose,   'click', closePfModal);
+    if (els.pfModal)   on(els.pfModal,   'click', (e) => { if (e.target === els.pfModal) closePfModal(); });
+    if (els.pfGameVerifyBtn) on(els.pfGameVerifyBtn, 'click', handlePfVerifyClick);
+    if (els.pfGameInput) on(els.pfGameInput, 'keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); handlePfVerifyClick(); }
     });
 
     // [data-action] navigation

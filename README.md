@@ -1,23 +1,71 @@
-# Coinflip Gold (v1.0)
+# Coinflip Gold (v1.1 — public release)
 
-A clean, full-stack **gold** coinflip game. Players sign up, get 100 Gold, create heads/tails wagers, and watch a fair, server-decided coin flip animation. Pure-fun MVP — no real money, no crypto, no gambling integrations.
+A clean, full-stack **gold** coinflip game. Players sign up, get 100 Gold, create heads/tails wagers, and watch a fair, server-decided coin flip animation. Pure-fun MVP — **no real money**, no crypto, no gambling integrations.
 
-## What's new in v1.0
+## What's new in v1.1 (public-release hardening)
 
-- Backend security hardening: `helmet` headers, real bcrypt timing-safe dummy hash, per-username login throttle, per-IP create-game throttle, password length cap, password length min/max validation, JWT no longer ships username in payload, JWT validated against fresh DB rows.
-- Wager and balance limits tightened: `MAX_WAGER` is now `1,000,000`, balances capped at `1,000,000,000` to keep the leaderboard stable.
-- Each player can hold at most **5 open games** at a time (configurable).
-- Stale open games auto-cancel after `OPEN_GAME_TTL_HOURS` (default 48h) and refund the creator.
-- DB-pinging `/health` endpoint, graceful `SIGTERM` shutdown, request IDs in logs.
-- Public leaderboard (no auth required).
-- New `/api/config` endpoint so the frontend reflects backend limits without redeploys.
-- Composite indexes on `games(status, created_at)` and `games(status, wager)`.
-- Frontend: creator-side flip animation, in-app confirm modal (replaces native `confirm()`), confirmation prompts on big wagers, SVG icon buttons, avatar letter blobs.
+- **Anti-farming.** Signup is now throttled per-IP via the new `signup_attempts` table (DB-backed, replica-safe): hard caps `SIGNUP_MAX_PER_IP_DAY=20` and `SIGNUP_MAX_ACCOUNTS_PER_IP_DAY=5`, plus a 4-second cooldown. IP and user-agent are stored as salted SHA-256 hashes — never the raw values.
+- **Optional email field.** Schema-ready for future verification flows. Unique on `LOWER(email)`, NULL-friendly so existing users are unaffected.
+- **Username uniqueness, case-insensitive.** New `users_username_lower_uniq` functional unique index makes "Hamoudi", "hamoudi", and "HAMOUDI" actually mutually exclusive at the database level. Race-safe — concurrent signups for the same name now return a clean 409 instead of crashing.
+- **Balance ledger.** New `balance_transactions` table records every Gold movement (signup bonus, escrow debit, refund, payout, stale refund, admin adjustment). Balance updates and ledger writes happen in the same transaction via `applyBalanceDelta` / `applyBalanceDeltaCapped` helpers in `db.js` — no code path can move Gold without an audit row.
+- **Provably-fair flip.** When a game is created, the server generates a 256-bit `server_seed`, commits its SHA-256 hash, and shows that hash to anyone viewing the game. On join, the result is `HMAC-SHA-256(server_seed, "<client_seed>:<game_id>")` — the first byte's lowest bit picks heads/tails. After completion, the seed is revealed and `POST /api/games/:id/verify` (or the in-app modal) lets anyone independently confirm.
+- **JWT hardening.** `JWT_SECRET < 16` chars or missing `FRONTEND_ORIGIN` now **fail-hard in production** (the server refuses to boot). New `token_version` claim + `POST /api/auth/logout-all` invalidates every issued token.
+- **Admin endpoint.** `GET /api/admin/suspicious` (gated by `ADMIN_API_TOKEN`, constant-time comparison) returns IP clusters, frequent rivals, "drained-then-quiet" new accounts, and high-win-rate streaks. Heuristics only — no actions taken.
+- **0-balance UX bug fixed.** Cancel now works for users at 0 Gold (it's how they get their escrow back). Only create / join are gated on balance.
+- **Locked-Gold pill.** Topbar now shows how much Gold is reserved in your open games so a 0-spendable player understands why creation is locked.
+- **Misc.** `clientIp` uses `req.ip` consistently (correct behind Railway's proxy); production stack traces hidden; cancelled/completed games can never be re-flipped (re-checked status in every UPDATE); `signup_attempts` pruned every 6 hours; constant-time admin token compare.
 
-> **Action required for existing deployments:**
-> 1. Run `ALTER` migrations from `schema.sql` (or just re-run `init-db` — `CREATE INDEX IF NOT EXISTS` is idempotent).
-> 2. Set `FRONTEND_ORIGIN` (now supports comma-separated list).
-> 3. `npm install` to pick up `helmet`.
+> **Action required for existing v1.0 deployments:**
+> 1. Run `npm run init-db` (or paste `backend/schema.sql` into Railway's Postgres console). It's fully idempotent.
+> 2. Set `FRONTEND_ORIGIN` if you haven't already — production refuses to boot without it.
+> 3. Set a strong `JWT_SECRET` (≥ 32 chars) — production refuses to boot without it.
+> 4. Optional: set `ADMIN_API_TOKEN` to enable admin endpoints.
+
+---
+
+## Production release checklist
+
+Before flipping coinfliplb.com to public, verify all of the following.
+
+**Backend (Railway service variables):**
+- [ ] `DATABASE_URL` references the Postgres plugin (use Railway's `${{Postgres.DATABASE_URL}}` syntax).
+- [ ] `JWT_SECRET` ≥ 32 random chars (`node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"`).
+- [ ] `FRONTEND_ORIGIN` is `https://coinfliplb.com,https://www.coinfliplb.com` (exactly the prod origins, no trailing slash).
+- [ ] `NODE_ENV=production`.
+- [ ] `IP_HASH_SALT` is set to a random ≥ 32-char string (different from `JWT_SECRET`). If unset, JWT_SECRET is reused — fine but not ideal.
+- [ ] `ADMIN_API_TOKEN` is set if you want `/api/admin/*` to work; leave unset to keep them disabled.
+- [ ] `STARTING_BALANCE` matches `config.js`'s `STARTING_BALANCE` (default 100).
+- [ ] Confirm only ONE Railway replica is running. Multi-replica is unsafe until rate-limit / online-user state moves to Redis (see scaling notes below).
+
+**Frontend (`config.js`):**
+- [ ] `API_BASE_URL` points to the production Railway URL (no trailing slash).
+- [ ] `APP_VERSION` reflects the deploy.
+
+**Database:**
+- [ ] `npm run init-db` ran cleanly against the production database. The output should show all four counts (users / games / ledger_rows / signup_attempts).
+- [ ] Optional: drop the legacy case-sensitive `users_username_key` constraint after confirming `users_username_lower_uniq` exists. See the bottom of `schema.sql` for the exact `ALTER` command.
+
+**End-to-end smoke test (run from your phone on cellular, NOT your desktop's WiFi):**
+- [ ] Sign up with a new username. Confirm starting balance = 100.
+- [ ] Sign out, sign back in.
+- [ ] Try signing up with the SAME username but different casing — should be rejected ("That username is already taken.").
+- [ ] Create a game — confirm balance debits immediately and a Locked-Gold pill appears in the topbar.
+- [ ] On a second device or browser, sign up another account, join the game — confirm flip animation runs and one balance moves.
+- [ ] Open the Provably Fair modal (shield icon in the topbar), paste the game ID, click Verify — confirm "Verified" with green border.
+- [ ] On the loser, confirm they can still browse and CAN cancel any of their other open games (this was bug #6 from the release plan).
+- [ ] Try creating ~6 accounts back-to-back from the same IP — the 6th must hit the throttle with a clear message.
+
+**Operational:**
+- [ ] `/health` returns 200 with `{"ok":true,"version":"1.1"}`.
+- [ ] CORS rejects unknown origins (try a curl from a non-allowed origin and confirm the request is blocked).
+- [ ] Railway logs show no `[unhandled]` errors after the first hour of normal traffic.
+- [ ] Railway memory + CPU usage look stable. The free / starter plan suffices for an MVP — the README's note about Railway costs scaling with usage is real; budget alerts are a good idea.
+
+**Remaining risks (cannot be fully solved in this release):**
+- Email verification is wired schema-side only. A determined attacker with rotating residential IPs can still grind accounts past the throttle. Adding actual verification + a captcha on signup is the next step.
+- All in-memory rate-limit and cooldown state is per-replica. **Keep Railway at 1 replica.** Scaling out requires a Redis-backed implementation.
+- No password reset flow yet. `POST /api/auth/logout-all` exists; a reset-by-email flow can be built on top of the new email field once delivery is wired.
+- Admin endpoint returns JSON only — there's no admin UI. Use `curl` for now.
 
 ---
 

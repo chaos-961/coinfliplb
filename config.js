@@ -22,5 +22,5 @@ window.CONFIG = Object.freeze({
   POLLING_INTERVAL_MS: 60000,
 
   // App version surfaced in the footer.
-  APP_VERSION: "v0.9.4",
+  APP_VERSION: "v1.1",
 });
