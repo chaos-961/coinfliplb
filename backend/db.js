@@ -8,7 +8,7 @@
 // For game-joining we need a transaction, so we expose `getClient()` to
 // let the caller manage BEGIN / COMMIT / ROLLBACK explicitly.
 //
-// v1.1 adds two helpers — `applyBalanceDelta` and `applyBalanceDeltaCapped`
+// Balance helpers — `applyBalanceDelta` and `applyBalanceDeltaCapped`
 // — which atomically update a user's balance AND insert a matching row
 // into `balance_transactions`. Every code path that changes a balance
 // MUST go through these so we never end up with an unaudited movement.

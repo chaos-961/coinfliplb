@@ -1,7 +1,7 @@
 window.CONFIG = Object.freeze({
   API_BASE_URL: "https://coinfliplb-production.up.railway.app",
 
-  APP_NAME: "Coinflip Gold",
+  APP_NAME: "Coinflip LB",
 
   // These are sensible client-side fallbacks. The frontend pulls the
   // authoritative values from /api/config at boot, so when the backend
@@ -22,5 +22,5 @@ window.CONFIG = Object.freeze({
   POLLING_INTERVAL_MS: 60000,
 
   // App version surfaced in the footer.
-  APP_VERSION: "v1.1",
+  APP_VERSION: "v1.3",
 });

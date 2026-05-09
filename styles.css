@@ -1,5 +1,5 @@
 /* =====================================================================
-   Coinflip Gold — styles.css
+   Coinflip LB — styles.css
    ---------------------------------------------------------------------
    Sober, modern, dark UI with a violet/gold accent. Mobile-first.
    The coin uses CSS 3D transforms with a multi-stage toss animation.
@@ -393,16 +393,6 @@ body[data-view="dashboard"] main {
 input[type="text"],
 input[type="password"],
 input[type="number"],
-input[type="email"] {
-  width: 100%;
-  padding: 12px 14px;
-  background: var(--bg-elev);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-md);
-  color: var(--text);
-  outline: none;
-  transition: border-color 150ms, box-shadow 150ms, background 150ms;
-}
 input::placeholder { color: var(--text-mute); }
 input:focus {
   border-color: var(--primary);
@@ -2919,7 +2909,7 @@ body[data-view="dashboard"] .theme-toggle:not(.icon-btn) { display: none !import
 }
 
 /* ==========================================================
-   v1.1 — Locked-Gold pill, Provably-Fair modal, footer polish
+   v1.3 — Locked-Gold pill and footer polish
    ========================================================== */
 
 /* Locked-Gold pill in topbar — visually quieter than balance-pill so it
@@ -2941,77 +2931,6 @@ body[data-view="dashboard"] .theme-toggle:not(.icon-btn) { display: none !import
 .locked-pill[hidden] { display: none; }
 .locked-pill .locked-icon { font-size: 11px; opacity: 0.85; }
 
-/* Optional-field tag in signup form — keeps the email label honest. */
-.field-optional {
-  font-weight: 400;
-  font-size: 11px;
-  margin-left: 4px;
-  opacity: 0.7;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-/* Provably-fair modal layout. Reuses existing modal-backdrop / modal styles. */
-.modal-md { max-width: 560px; }
-.pf-modal-card .pf-body {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  margin-top: 6px;
-}
-.pf-steps {
-  margin: 0;
-  padding-left: 18px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  font-size: 14px;
-  line-height: 1.45;
-}
-.pf-steps li code {
-  background: color-mix(in srgb, var(--card-bg, #1a1f2e) 70%, transparent);
-  padding: 1px 5px;
-  border-radius: 4px;
-  font-size: 12px;
-}
-.pf-note { font-size: 13px; opacity: 0.85; margin: 0; }
-.pf-verify-row {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
-.pf-verify-row input {
-  flex: 1;
-  min-width: 0;
-  padding: 9px 11px;
-  border-radius: 8px;
-  border: 1px solid var(--border, #2a3040);
-  background: var(--input-bg, #0f1320);
-  color: inherit;
-  font: inherit;
-}
-.pf-result {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  font-size: 12px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  word-break: break-all;
-  max-height: 220px;
-  overflow-y: auto;
-  padding: 8px 10px;
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--card-bg, #1a1f2e) 80%, transparent);
-  border: 1px solid var(--border, #2a3040);
-}
-.pf-result:empty {
-  display: none;
-}
-.pf-result.is-ok    { border-color: #16a34a; }
-.pf-result.is-bad   { border-color: #dc2626; }
-.pf-result .pf-line { display: grid; grid-template-columns: 130px 1fr; gap: 8px; }
-.pf-result .pf-key  { color: var(--muted, #9aa3b2); }
-.pf-result .pf-val  { word-break: break-all; }
 
 /* Footer polish — a single line with the version, fineprint, and link. */
 .app-footer {

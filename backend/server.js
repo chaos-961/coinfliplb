@@ -1,5 +1,5 @@
 // =====================================================================
-// server.js — Coinflip Gold backend (v1.1, public-release)
+// server.js — Coinflip LB backend (v1.3, public-release)
 // ---------------------------------------------------------------------
 // This is the single source of truth for the game. The frontend is
 // purely a UI: every important decision (who wins a flip, what your
@@ -17,34 +17,24 @@
 //   GET  /api/games                list open games with optional filters
 //   POST /api/games/:id/join       join a game, runs the flip atomically
 //   POST /api/games/:id/cancel     cancel an open game (creator only)
-//   GET  /api/games/:id            fetch one game's details (incl. PF info)
-//   POST /api/games/:id/verify     server-side verification helper
+//   GET  /api/games/:id            fetch one game's details
+//   GET  /api/events               live user notifications (SSE)
 //   GET  /api/me/games             list current user's games
-//   GET  /api/me/transactions      current user's ledger entries
 //   GET  /api/leaderboard          top users sorted by balance (public)
-//   GET  /api/me/stats             current player computed stats
+//   GET  /api/me/stats             current player stored stats
 //   POST /api/presence/heartbeat   online player heartbeat
 //   GET  /api/config               client-side runtime config
 //   GET  /api/admin/suspicious     admin-only: clusters of suspicious activity
 //   GET  /health                   liveness check (pings DB)
 //
-// What's new in v1.1 (vs the original v1.0):
-//   • Signup IP/UA throttling backed by `signup_attempts` (DB-backed,
-//     survives restarts and works correctly behind Railway's proxy).
-//   • Optional `email` field, schema-ready for future verification flow.
-//   • Race-safe case-insensitive username uniqueness via
-//     `users_username_lower_uniq` and 23505 unique-violation handling.
+// Release notes:
+//   • No email collection or email verification flow.
+//   • CSPRNG-backed server flip with no public seed-check UI or DB columns.
+//   • Live creator notifications via SSE when an online user's game is joined.
+//   • Stored user stats for cheap leaderboard/stats reads.
 //   • Full `balance_transactions` ledger — every Gold movement audited.
-//   • Provably-fair coinflip: server seed committed via SHA-256 hash
-//     before the join, revealed after, combined with a client seed +
-//     game id (nonce) to produce the result.
-//   • JWT token versioning so password changes / logout-all invalidate
-//     existing tokens.
-//   • Fail-hard JWT_SECRET in production; cleaner config error messages.
-//   • Admin endpoint for suspicious-activity heuristics (gated by
-//     ADMIN_API_TOKEN).
-//   • Fix: `clientIp` now uses `req.ip` consistently (not raw header).
-//   • Fix: cancelled/completed games can never re-flip due to row locks.
+//   • DB-backed signup throttling and case-insensitive username uniqueness.
+//   • JWT token versioning so logout-all invalidates existing tokens.
 // =====================================================================
 
 require('dotenv').config();
@@ -87,12 +77,6 @@ function sha256Hex(value) {
   return crypto.createHash('sha256').update(String(value || ''), 'utf8').digest('hex');
 }
 
-// HMAC-SHA-256 used by the provably-fair flip. Keyed-hashing means a
-// malicious client can't precompute results without the server seed.
-function hmacSha256Hex(key, message) {
-  return crypto.createHmac('sha256', String(key)).update(String(message), 'utf8').digest('hex');
-}
-
 // ---------------------------------------------------------------------
 // Configuration (read from environment, with sensible fallbacks)
 // ---------------------------------------------------------------------
@@ -133,15 +117,14 @@ const MAX_CACHE_ENTRIES        = 100;
 //   - At most SIGNUP_MAX_PER_IP_DAY successful + failed attempts per IP per 24h.
 //   - At most SIGNUP_MAX_ACCOUNTS_PER_IP_DAY accounts actually created per IP per 24h.
 //   - Soft cooldown SIGNUP_COOLDOWN_MS between attempts from the same IP.
-const SIGNUP_MAX_PER_IP_DAY            = parseInt(process.env.SIGNUP_MAX_PER_IP_DAY            || '20', 10);
-const SIGNUP_MAX_ACCOUNTS_PER_IP_DAY   = parseInt(process.env.SIGNUP_MAX_ACCOUNTS_PER_IP_DAY   || '5',  10);
+const SIGNUP_MAX_PER_IP_DAY            = parseInt(process.env.SIGNUP_MAX_PER_IP_DAY            || '10', 10);
+const SIGNUP_MAX_ACCOUNTS_PER_IP_DAY   = parseInt(process.env.SIGNUP_MAX_ACCOUNTS_PER_IP_DAY   || '2',  10);
 const SIGNUP_COOLDOWN_MS               = parseInt(process.env.SIGNUP_COOLDOWN_MS               || '4000', 10);
 
 const MIN_PASSWORD_LENGTH = 6;
 const MAX_PASSWORD_LENGTH = 200;             // bcrypt DoS guard
 const MAX_USERNAME_LENGTH = 32;
 const MIN_USERNAME_LENGTH = 3;
-const MAX_EMAIL_LENGTH    = 254;             // RFC 5321 practical limit
 const MIN_WAGER           = 1;
 const MAX_WAGER           = 1_000_000;        // tightened from 10B to 1M
 const MAX_BALANCE         = 1_000_000_000;    // hard cap so leaderboard can't run away
@@ -315,17 +298,24 @@ app.use((req, res, next) => {
 
 // Cap concurrent API requests per IP to reduce cheap flood pressure.
 app.use('/api/', (req, res, next) => {
+  // SSE stays open by design; do not count it as an in-flight request.
+  if (req.method === 'GET' && req.path === '/events') return next();
   const ip = clientIp(req);
   const active = inFlightByIp.get(ip) || 0;
   if (active >= MAX_IN_FLIGHT_PER_IP) {
     return res.status(429).json({ error: 'Too many concurrent requests. Slow down.' });
   }
   inFlightByIp.set(ip, active + 1);
-  res.on('finish', () => {
+  let released = false;
+  const release = () => {
+    if (released) return;
+    released = true;
     const current = inFlightByIp.get(ip) || 1;
     if (current <= 1) inFlightByIp.delete(ip);
     else inFlightByIp.set(ip, current - 1);
-  });
+  };
+  res.on('finish', release);
+  res.on('close', release);
   next();
 });
 
@@ -471,9 +461,7 @@ function publicUser(row) {
   };
 }
 
-function publicGame(row, { includeServerSeed = false } = {}) {
-  // We expose the server seed only after a game has resolved.
-  const completed = row.status === 'completed' || row.status === 'cancelled';
+function publicGame(row) {
   return {
     id: row.id,
     creator_id: row.creator_id,
@@ -488,12 +476,6 @@ function publicGame(row, { includeServerSeed = false } = {}) {
     status: row.status,
     created_at: row.created_at,
     completed_at: row.completed_at,
-    // Provably-fair fields. Hash is always safe to show; seed only after.
-    server_seed_hash: row.server_seed_hash || null,
-    server_seed: includeServerSeed && completed ? (row.server_seed || null) : null,
-    client_seed: row.client_seed || null,
-    nonce: row.nonce !== null && row.nonce !== undefined ? Number(row.nonce) : null,
-    pf_algo: row.pf_algo || null,
   };
 }
 
@@ -513,94 +495,28 @@ function publicStats(row) {
 
 async function getPlayerStats(userId) {
   const userRes = await db.query(
-    'SELECT id, username, balance, created_at FROM users WHERE id = $1',
+    `SELECT id, username, balance, created_at,
+            games_played, wins, losses, current_win_streak, max_win_streak
+       FROM users WHERE id = $1`,
     [userId]
   );
   if (userRes.rowCount === 0) return null;
-
-  const aggregateRes = await db.query(
-    `SELECT
-        COUNT(*)::int AS games_played,
-        COUNT(*) FILTER (WHERE winner_id = $1)::int AS wins,
-        COUNT(*) FILTER (WHERE winner_id <> $1)::int AS losses
-       FROM games
-      WHERE status = 'completed' AND (creator_id = $1 OR joiner_id = $1)`,
-    [userId]
-  );
-
-  const historyRes = await db.query(
-    `SELECT winner_id
-       FROM games
-      WHERE status = 'completed' AND (creator_id = $1 OR joiner_id = $1)
-      ORDER BY completed_at ASC, id ASC`,
-    [userId]
-  );
-
-  let current = 0;
-  let max = 0;
-  for (const row of historyRes.rows) {
-    if (Number(row.winner_id) === Number(userId)) {
-      current += 1;
-      if (current > max) max = current;
-    } else {
-      current = 0;
-    }
-  }
-
-  const stats = {
-    ...aggregateRes.rows[0],
-    current_win_streak: current,
-    max_win_streak: max,
-  };
-
-  return { user: publicUser(userRes.rows[0]), stats: publicStats(stats) };
+  const row = userRes.rows[0];
+  return { user: publicUser(row), stats: publicStats(row) };
 }
 
 // ---------------------------------------------------------------------
-// Provably-fair coinflip
+// Server-side coinflip
 // ---------------------------------------------------------------------
-// Algorithm:
-//   1. When a game is created, the server generates a random 32-byte seed
-//      (`server_seed`) and stores it. It also stores a SHA-256 hash of
-//      that seed (`server_seed_hash`) which is shown to anyone who looks
-//      at the game.
-//   2. When a player joins, they may pass an optional `client_seed`. If
-//      they don't, the server fills one in for them with random bytes.
-//   3. The result is HMAC-SHA-256(server_seed, "<client_seed>:<game_id>").
-//      The lowest bit of the first byte selects heads (0) or tails (1).
-//      256 is divisible by 2 so there's no modulo bias.
-//   4. After the flip, the server stores the result and reveals the
-//      server_seed to the public via GET /api/games/:id.
-//
-// Anyone can independently check: given the revealed server_seed, the
-// client_seed, and the game id, the result must come out the same.
-// And because the seed's hash was committed *before* the join, the
-// server cannot have chosen the seed after the fact.
+// The public game no longer exposes seed-check verification. For the
+// launch build, the result is a simple CSPRNG flip generated inside the
+// join transaction. `crypto.randomInt(2)` avoids modulo bias and does not
+// depend on any client-provided value.
 // ---------------------------------------------------------------------
-const PF_ALGO_NAME = 'hmac-sha256(server_seed, client_seed:game_id)/v1';
-
-function newServerSeed() {
-  return crypto.randomBytes(32).toString('hex');
+function serverCoinFlip() {
+  return crypto.randomInt(2) === 0 ? 'heads' : 'tails';
 }
 
-function newClientSeedFallback() {
-  return crypto.randomBytes(16).toString('hex');
-}
-
-function provablyFairFlip(serverSeed, clientSeed, gameId) {
-  const message = `${clientSeed}:${gameId}`;
-  const digest = hmacSha256Hex(serverSeed, message);
-  // Use the first byte's lowest bit. Hex chars 0-1 = first byte.
-  const firstByte = parseInt(digest.slice(0, 2), 16);
-  return (firstByte & 1) === 0 ? 'heads' : 'tails';
-}
-
-function isReasonableClientSeed(value) {
-  if (typeof value !== 'string') return false;
-  if (value.length < 1 || value.length > 128) return false;
-  // Printable ASCII only. Keeps verification copy/pasteable across systems.
-  return /^[\x20-\x7E]+$/.test(value);
-}
 
 function normalizeUsername(value) {
   return String(value || '').trim().replace(/\s+/g, '');
@@ -618,14 +534,6 @@ function isValidUsername(u) {
   return true;
 }
 
-function isValidEmail(value) {
-  if (typeof value !== 'string') return false;
-  const v = value.trim();
-  if (!v) return false;
-  if (v.length > MAX_EMAIL_LENGTH) return false;
-  // Keep validation lenient — true validation comes from sending mail later.
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
-}
 
 function isStrongEnoughPassword(password) {
   if (!REQUIRE_STRONG_PASSWORD) return true;
@@ -633,8 +541,41 @@ function isStrongEnoughPassword(password) {
 }
 
 // ---------------------------------------------------------------------
-// Authentication middleware
+// Authentication middleware + live notifications
 // ---------------------------------------------------------------------
+async function verifySessionToken(token) {
+  if (!token || String(token).length > 2048) {
+    const err = new Error('Invalid session token.');
+    err.status = 401;
+    throw err;
+  }
+  const payload = jwt.verify(
+    token,
+    JWT_SECRET || 'dev-fallback-secret-change-me',
+    { algorithms: ['HS256'] }
+  );
+  const uid = Number(payload.uid);
+  if (!Number.isSafeInteger(uid) || uid <= 0) {
+    const err = new Error('Invalid session token.');
+    err.status = 401;
+    throw err;
+  }
+  const userRow = await db.query('SELECT id, token_version FROM users WHERE id = $1', [uid]);
+  if (userRow.rowCount === 0) {
+    const err = new Error('Account no longer exists.');
+    err.status = 401;
+    throw err;
+  }
+  const currentV = Number(userRow.rows[0].token_version || 0);
+  const tokenV = Number(payload.v || 0);
+  if (currentV !== tokenV) {
+    const err = new Error('Session expired. Please log in again.');
+    err.status = 401;
+    throw err;
+  }
+  return { id: uid };
+}
+
 async function requireAuth(req, res, next) {
   const header = req.headers.authorization || '';
   const [scheme, token] = header.split(' ');
@@ -642,33 +583,23 @@ async function requireAuth(req, res, next) {
     return res.status(401).json({ error: 'Missing or malformed Authorization header.' });
   }
   try {
-    if (token.length > 2048) return res.status(401).json({ error: 'Invalid session token.' });
-    const payload = jwt.verify(
-      token,
-      JWT_SECRET || 'dev-fallback-secret-change-me',
-      { algorithms: ['HS256'] }
-    );
-    const uid = Number(payload.uid);
-    if (!Number.isSafeInteger(uid) || uid <= 0) {
-      return res.status(401).json({ error: 'Invalid session token.' });
-    }
-    // Verify the token's `v` claim matches the user's current
-    // token_version. A bumped version makes every previously-issued
-    // token unauthenticated immediately.
-    const userRow = await db.query('SELECT id, token_version FROM users WHERE id = $1', [uid]);
-    if (userRow.rowCount === 0) {
-      return res.status(401).json({ error: 'Account no longer exists.' });
-    }
-    const currentV = Number(userRow.rows[0].token_version || 0);
-    const tokenV = Number(payload.v || 0);
-    if (currentV !== tokenV) {
-      return res.status(401).json({ error: 'Session expired. Please log in again.' });
-    }
-    req.user = { id: uid };
+    req.user = await verifySessionToken(token);
     next();
-  } catch {
-    return res.status(401).json({ error: 'Session expired. Please log in again.' });
+  } catch (err) {
+    return res.status(401).json({ error: err.message || 'Session expired. Please log in again.' });
   }
+}
+
+const sseClients = new Map(); // userId -> Set(response)
+
+function notifyUser(userId, event, payload) {
+  const set = sseClients.get(Number(userId));
+  if (!set || set.size === 0) return;
+  const msg = `event: ${event}\ndata: ${JSON.stringify(payload)}\n\n`;
+  for (const res of Array.from(set)) {
+    try { res.write(msg); } catch { set.delete(res); }
+  }
+  if (set.size === 0) sseClients.delete(Number(userId));
 }
 
 // Admin-only middleware. Compares a single shared token using a constant-
@@ -698,7 +629,7 @@ function requireAdmin(req, res, next) {
 app.get('/health', async (_req, res) => {
   try {
     await db.query('SELECT 1');
-    res.json({ ok: true, service: 'coinflip-arena', version: '1.1', time: new Date().toISOString() });
+    res.json({ ok: true, service: 'coinflip-lb', version: '1.2', time: new Date().toISOString() });
   } catch (err) {
     console.error('[health] DB ping failed:', err.message);
     res.status(503).json({ ok: false, error: 'Database unreachable.' });
@@ -717,11 +648,55 @@ app.get('/api/config', (_req, res) => {
     maxOpenGamesPerUser: MAX_OPEN_GAMES_PER_USER,
     openGameTtlHours: OPEN_GAME_TTL_HOURS,
     requireStrongPassword: REQUIRE_STRONG_PASSWORD,
-    provablyFair: {
-      enabled: true,
-      algorithm: PF_ALGO_NAME,
-    },
   });
+});
+
+// ----- GET /api/events ------------------------------------------------
+// Server-Sent Events: instant notification when an online creator's game is joined.
+app.get('/api/events', async (req, res) => {
+  try {
+    const token = String(req.query.token || '');
+    const user = await verifySessionToken(token);
+
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache, no-transform');
+    res.setHeader('Connection', 'keep-alive');
+    res.flushHeaders?.();
+
+    if (!sseClients.has(user.id)) sseClients.set(user.id, new Set());
+    sseClients.get(user.id).add(res);
+    res.write(`event: connected\ndata: {"ok":true}\n\n`);
+
+    const keepAlive = setInterval(() => {
+      try { res.write(`event: ping\ndata: {}\n\n`); } catch {}
+    }, 25000);
+
+    req.on('close', () => {
+      clearInterval(keepAlive);
+      const set = sseClients.get(user.id);
+      if (set) {
+        set.delete(res);
+        if (set.size === 0) sseClients.delete(user.id);
+      }
+    });
+  } catch {
+    return res.status(401).json({ error: 'Session expired. Please log in again.' });
+  }
+});
+
+
+// ----- POST /api/presence/heartbeat ---------------------------------
+// Lightweight online counter for the topbar. This is intentionally
+// in-memory; run one backend replica unless you add Redis/pub-sub.
+app.post('/api/presence/heartbeat', requireAuth, async (req, res) => {
+  try {
+    const online = touchOnlineUser(req.user.id);
+    await db.query('UPDATE users SET last_seen_at = NOW() WHERE id = $1', [req.user.id]);
+    return res.json({ ok: true, online });
+  } catch (err) {
+    console.error('[presence heartbeat]', err);
+    return res.status(500).json({ error: 'Could not update presence.' });
+  }
 });
 
 // ----- POST /api/auth/signup -----------------------------------------
@@ -732,7 +707,6 @@ app.post('/api/auth/signup', signupIpLimiter, authLimiter, async (req, res) => {
   try {
     const username   = normalizeUsername(req.body?.username);
     const password   = req.body?.password || '';
-    const emailInput = (req.body?.email || '').toString().trim();
 
     // Synchronous validation first — cheap and tells the user fast.
     if (!isValidUsername(username)) {
@@ -751,15 +725,6 @@ app.post('/api/auth/signup', signupIpLimiter, authLimiter, async (req, res) => {
       return res.status(400).json({
         error: 'Password must include lowercase, uppercase, and a number.'
       });
-    }
-
-    // Email is optional. If present, validate; if absent, leave as null.
-    let email = null;
-    if (emailInput) {
-      if (!isValidEmail(emailInput)) {
-        return res.status(400).json({ error: 'That email address looks invalid.' });
-      }
-      email = emailInput.toLowerCase();
     }
 
     // ----- DB-backed signup throttling -------------------------------
@@ -831,10 +796,10 @@ app.post('/api/auth/signup', signupIpLimiter, authLimiter, async (req, res) => {
       let insertedUser;
       try {
         const insert = await client.query(
-          `INSERT INTO users (username, password_hash, balance, email, signup_ip_hash, signup_ua_hash, last_ip_hash, last_seen_at)
-           VALUES ($1, $2, 0, $3, $4, $5, $4, NOW())
-           RETURNING id, username, balance, created_at, token_version, email`,
-          [username, password_hash, email, ip_hash, ua_hash]
+          `INSERT INTO users (username, password_hash, balance, signup_ip_hash, signup_ua_hash, last_ip_hash, last_seen_at)
+           VALUES ($1, $2, 0, $3, $4, $3, NOW())
+           RETURNING id, username, balance, created_at, token_version`,
+          [username, password_hash, ip_hash, ua_hash]
         );
         insertedUser = insert.rows[0];
       } catch (insertErr) {
@@ -843,15 +808,10 @@ app.post('/api/auth/signup', signupIpLimiter, authLimiter, async (req, res) => {
         // make it past the pre-check, but only one survives this INSERT.
         await client.query('ROLLBACK');
         if (insertErr && insertErr.code === '23505') {
-          // Could be username or email, depending on which constraint fired.
-          const detail = String(insertErr.constraint || insertErr.detail || '');
           await db.query(
             `INSERT INTO signup_attempts (ip_hash, ua_hash, success) VALUES ($1, $2, false)`,
             [ip_hash, ua_hash]
           );
-          if (detail.includes('email')) {
-            return res.status(409).json({ error: 'That email is already in use.' });
-          }
           return res.status(409).json({ error: 'That username is already taken.' });
         }
         throw insertErr;
@@ -986,55 +946,10 @@ app.get('/api/me/stats', requireAuth, async (req, res) => {
   }
 });
 
-// ----- GET /api/me/transactions --------------------------------------
-// User-facing ledger viewer. Lets a player audit their own balance.
-app.get('/api/me/transactions', requireAuth, async (req, res) => {
-  try {
-    const page = parsePage(req.query.page, 1);
-    const limit = parseLimit(req.query.limit, 20, 50);
-    const offset = (page - 1) * limit;
-    const total = Number((await db.query(
-      'SELECT COUNT(*)::int AS c FROM balance_transactions WHERE user_id = $1',
-      [req.user.id]
-    )).rows[0]?.c || 0);
-    const result = await db.query(
-      `SELECT id, type, amount, balance_before, balance_after, related_game_id, metadata, created_at
-         FROM balance_transactions
-        WHERE user_id = $1
-        ORDER BY id DESC
-        LIMIT $2 OFFSET $3`,
-      [req.user.id, limit, offset]
-    );
-    return res.json({
-      transactions: result.rows.map(r => ({
-        id: Number(r.id),
-        type: r.type,
-        amount: Number(r.amount),
-        balance_before: Number(r.balance_before),
-        balance_after: Number(r.balance_after),
-        related_game_id: r.related_game_id,
-        metadata: r.metadata || null,
-        created_at: r.created_at,
-      })),
-      page, limit, total,
-      totalPages: Math.max(1, Math.ceil(total / limit)),
-    });
-  } catch (err) {
-    console.error('[transactions]', err);
-    return res.status(500).json({ error: 'Could not load transactions.' });
-  }
-});
-
-app.post('/api/presence/heartbeat', requireAuth, (req, res) => {
-  const online = touchOnlineUser(req.user.id);
-  res.json({ online });
-});
 
 // ----- POST /api/games (create) --------------------------------------
 // Creates an open game and reserves the creator's wager immediately.
 // This prevents a user with $60 from creating multiple $50 games.
-// Also generates the provably-fair server seed up front and commits its
-// hash to the database before the game is visible to anyone.
 app.post('/api/games', requireAuth, createGameLimiter, requireCooldown('create-game', CREATE_COOLDOWN_MS), async (req, res) => {
   const choice = req.body?.choice;
   const wager  = parseWagerInteger(req.body?.wager);
@@ -1047,11 +962,6 @@ app.post('/api/games', requireAuth, createGameLimiter, requireCooldown('create-g
       error: `Wager must be a whole number between ${MIN_WAGER} and ${MAX_WAGER}.`
     });
   }
-
-  // Generate the PF seed BEFORE we open the transaction. We never want
-  // the random bytes to depend on transactional state.
-  const serverSeed = newServerSeed();
-  const serverSeedHash = sha256Hex(serverSeed);
 
   const client = await db.getClient();
   try {
@@ -1084,10 +994,10 @@ app.post('/api/games', requireAuth, createGameLimiter, requireCooldown('create-g
 
     // Insert the game first so the ledger row can reference it.
     const insert = await client.query(
-      `INSERT INTO games (creator_id, creator_choice, wager, status, server_seed, server_seed_hash, pf_algo)
-       VALUES ($1, $2, $3, 'open', $4, $5, $6)
-       RETURNING id, creator_id, creator_choice, wager, status, created_at, server_seed_hash, pf_algo`,
-      [req.user.id, choice, wager, serverSeed, serverSeedHash, PF_ALGO_NAME]
+      `INSERT INTO games (creator_id, creator_choice, wager, status)
+       VALUES ($1, $2, $3, 'open')
+       RETURNING id, creator_id, creator_choice, wager, status, created_at`,
+      [req.user.id, choice, wager]
     );
     const gameRow = insert.rows[0];
 
@@ -1116,8 +1026,6 @@ app.post('/api/games', requireAuth, createGameLimiter, requireCooldown('create-g
         joiner_id: null, joiner_username: null,
         result: null, winner_id: null, winner_username: null,
         completed_at: null,
-        // server_seed is intentionally NOT exposed yet.
-        client_seed: null, nonce: null,
       }),
       user: publicUser(updatedUser),
     });
@@ -1176,11 +1084,13 @@ app.get('/api/games', requireAuth, async (req, res) => {
 
     const sql = `
       SELECT g.id, g.creator_id, u.username AS creator_username,
+             ju.username AS joiner_username, wu.username AS winner_username,
              g.creator_choice, g.wager, g.status, g.created_at,
-             g.joiner_id, g.result, g.winner_id, g.completed_at,
-             g.server_seed_hash, g.client_seed, g.nonce, g.pf_algo
+             g.joiner_id, g.result, g.winner_id, g.completed_at
       FROM games g
       JOIN users u ON u.id = g.creator_id
+ LEFT JOIN users ju ON ju.id = g.joiner_id
+ LEFT JOIN users wu ON wu.id = g.winner_id
       WHERE ${where}
       ORDER BY g.created_at DESC
       LIMIT $${p++} OFFSET $${p++}
@@ -1204,8 +1114,7 @@ app.get('/api/games', requireAuth, async (req, res) => {
 });
 
 // ----- GET /api/games/:id (single) -----------------------------------
-// Returns the full game including provably-fair fields. The server seed
-// is only revealed for completed/cancelled games.
+// Returns one game. Internal seed fields are not exposed.
 app.get('/api/games/:id', requireAuth, async (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);
@@ -1228,7 +1137,7 @@ app.get('/api/games/:id', requireAuth, async (req, res) => {
     if (result.rowCount === 0) {
       return res.status(404).json({ error: 'Game not found.' });
     }
-    return res.json({ game: publicGame(result.rows[0], { includeServerSeed: true }) });
+    return res.json({ game: publicGame(result.rows[0]) });
 
   } catch (err) {
     console.error('[get game]', err);
@@ -1236,46 +1145,6 @@ app.get('/api/games/:id', requireAuth, async (req, res) => {
   }
 });
 
-// ----- POST /api/games/:id/verify ------------------------------------
-// Server-side helper that re-runs the provably-fair flip for a completed
-// game and returns the inputs + computed result. Anyone can also do this
-// in the browser; we expose the helper for users who'd rather not.
-app.post('/api/games/:id/verify', async (req, res) => {
-  try {
-    const id = parseInt(req.params.id, 10);
-    if (!Number.isInteger(id) || id <= 0) {
-      return res.status(400).json({ error: 'Invalid game id.' });
-    }
-    const result = await db.query(
-      `SELECT id, status, server_seed, server_seed_hash, client_seed, nonce, result, pf_algo
-         FROM games WHERE id = $1`,
-      [id]
-    );
-    if (result.rowCount === 0) return res.status(404).json({ error: 'Game not found.' });
-    const g = result.rows[0];
-    if (g.status !== 'completed') {
-      return res.status(409).json({ error: 'Game has not been resolved yet — nothing to verify.' });
-    }
-
-    const recomputed = provablyFairFlip(g.server_seed, g.client_seed, g.nonce);
-    const hashMatches = sha256Hex(g.server_seed) === g.server_seed_hash;
-    return res.json({
-      gameId: id,
-      algorithm: g.pf_algo,
-      server_seed: g.server_seed,
-      server_seed_hash: g.server_seed_hash,
-      client_seed: g.client_seed,
-      nonce: Number(g.nonce),
-      stored_result: g.result,
-      recomputed_result: recomputed,
-      hash_matches: hashMatches,
-      verified: hashMatches && recomputed === g.result,
-    });
-  } catch (err) {
-    console.error('[verify game]', err);
-    return res.status(500).json({ error: 'Could not verify the game.' });
-  }
-});
 
 // ----- POST /api/games/:id/cancel ------------------------------------
 // Cancels an open game created by the current user and refunds escrow.
@@ -1345,22 +1214,12 @@ app.post('/api/games/:id/cancel', requireAuth, gameActionLimiter, requireCooldow
 
 // ----- POST /api/games/:id/join --------------------------------------
 // The creator's wager is already in escrow. Joining deducts the joiner's
-// wager, runs the provably-fair flip, then pays the full pot (2x wager)
+// wager, runs the server-side flip, then pays the full pot (2x wager)
 // to the winner via the ledger.
 app.post('/api/games/:id/join', requireAuth, gameActionLimiter, requireCooldown('join-game', JOIN_COOLDOWN_MS), async (req, res) => {
   const gameId = parseInt(req.params.id, 10);
   if (!Number.isInteger(gameId) || gameId <= 0) {
     return res.status(400).json({ error: 'Invalid game id.' });
-  }
-
-  // Optional joiner-supplied client seed for provably-fair verification.
-  let clientSeed = req.body?.client_seed;
-  if (clientSeed != null) {
-    if (!isReasonableClientSeed(clientSeed)) {
-      return res.status(400).json({ error: 'Client seed must be 1–128 printable ASCII characters.' });
-    }
-  } else {
-    clientSeed = newClientSeedFallback();
   }
 
   // In-memory fast-fail to reject obvious double-clicks before the DB
@@ -1424,8 +1283,8 @@ app.post('/api/games/:id/join', requireAuth, gameActionLimiter, requireCooldown(
       return res.status(400).json({ error: 'You do not have enough gold to join this game.' });
     }
 
-    // ----- Provably-fair flip -------------------------------------
-    const flipResult = provablyFairFlip(game.server_seed, clientSeed, game.id);
+    // Server-side CSPRNG flip.
+    const flipResult = serverCoinFlip();
     const winnerId = (game.creator_choice === flipResult) ? creator.id : joiner.id;
     const pot = wager * 2;
 
@@ -1462,10 +1321,28 @@ app.post('/api/games/:id/join', requireAuth, gameActionLimiter, requireCooldown(
     await client.query(
       `UPDATE games
           SET joiner_id = $1, result = $2, winner_id = $3,
-              status = 'completed', completed_at = NOW(),
-              client_seed = $4, nonce = $5
-        WHERE id = $6 AND status = 'open'`,
-      [joiner.id, flipResult, winnerId, clientSeed, game.id, game.id]
+              status = 'completed', completed_at = NOW()
+        WHERE id = $4 AND status = 'open'`,
+      [joiner.id, flipResult, winnerId, game.id]
+    );
+
+    const loserId = Number(winnerId) === Number(creator.id) ? joiner.id : creator.id;
+    await client.query(
+      `UPDATE users
+          SET games_played = games_played + 1,
+              wins = wins + 1,
+              current_win_streak = current_win_streak + 1,
+              max_win_streak = GREATEST(max_win_streak, current_win_streak + 1)
+        WHERE id = $1`,
+      [winnerId]
+    );
+    await client.query(
+      `UPDATE users
+          SET games_played = games_played + 1,
+              losses = losses + 1,
+              current_win_streak = 0
+        WHERE id = $1`,
+      [loserId]
     );
 
     await client.query('COMMIT');
@@ -1489,11 +1366,25 @@ app.post('/api/games/:id/join', requireAuth, gameActionLimiter, requireCooldown(
       [req.user.id]
     );
 
-    return res.json({
-      game: publicGame(finalRes.rows[0], { includeServerSeed: true }),
+    const responsePayload = {
+      game: publicGame(finalRes.rows[0]),
       user: publicUser(userRes.rows[0]),
       balance: Math.floor(Number(userRes.rows[0].balance)),
-    });
+    };
+
+    const creatorBalanceRes = await db.query(
+      'SELECT id, username, balance, created_at FROM users WHERE id = $1',
+      [game.creator_id]
+    );
+    if (creatorBalanceRes.rowCount > 0) {
+      notifyUser(game.creator_id, 'game_joined', {
+        game: responsePayload.game,
+        user: publicUser(creatorBalanceRes.rows[0]),
+        balance: Math.floor(Number(creatorBalanceRes.rows[0].balance)),
+      });
+    }
+
+    return res.json(responsePayload);
 
   } catch (err) {
     try { await client.query('ROLLBACK'); } catch {}
@@ -1530,7 +1421,6 @@ app.get('/api/me/games', requireAuth, async (req, res) => {
     const sql = `
       SELECT g.id, g.creator_id, g.creator_choice, g.wager, g.status,
              g.created_at, g.joiner_id, g.result, g.winner_id, g.completed_at,
-             g.server_seed_hash, g.client_seed, g.nonce, g.pf_algo,
              cu.username AS creator_username,
              ju.username AS joiner_username,
              wu.username AS winner_username
@@ -1578,24 +1468,15 @@ app.get('/api/leaderboard', async (req, res) => {
     const result = await db.query(
       `WITH ranked AS (
          SELECT id, username, balance, created_at,
+                games_played, wins, losses, current_win_streak, max_win_streak,
                 ROW_NUMBER() OVER (ORDER BY balance DESC, created_at ASC) AS rank
            FROM users
           ORDER BY balance DESC, created_at ASC
           LIMIT 100
-       ), paged AS (
-         SELECT * FROM ranked
-          WHERE rank > $1 AND rank <= $2
        )
-       SELECT p.id, p.username, p.balance, p.created_at, p.rank,
-              COUNT(g.id) FILTER (WHERE g.status = 'completed')::int AS games_played,
-              COUNT(g.id) FILTER (WHERE g.status = 'completed' AND g.winner_id = p.id)::int AS wins,
-              COUNT(g.id) FILTER (WHERE g.status = 'completed' AND g.winner_id <> p.id)::int AS losses
-         FROM paged p
-         LEFT JOIN games g
-           ON g.status = 'completed'
-          AND (g.creator_id = p.id OR g.joiner_id = p.id)
-        GROUP BY p.id, p.username, p.balance, p.created_at, p.rank
-        ORDER BY p.rank ASC`,
+       SELECT * FROM ranked
+        WHERE rank > $1 AND rank <= $2
+        ORDER BY rank ASC`,
       [offset, offset + limit]
     );
     const payload = {
@@ -1681,19 +1562,9 @@ app.get('/api/admin/suspicious', requireAdmin, async (_req, res) => {
     );
 
     const hot = await db.query(
-      `WITH stats AS (
-          SELECT u.id, u.username,
-                 COUNT(g.id)::int AS games_played,
-                 COUNT(g.id) FILTER (WHERE g.winner_id = u.id)::int AS wins
-            FROM users u
-            JOIN games g
-              ON g.status = 'completed'
-             AND (g.creator_id = u.id OR g.joiner_id = u.id)
-           GROUP BY u.id, u.username
-       )
-       SELECT id, username, games_played, wins,
+      `SELECT id, username, games_played, wins,
               ROUND((wins::numeric / NULLIF(games_played, 0)) * 1000) / 10 AS win_rate
-         FROM stats
+         FROM users
         WHERE games_played >= 30
           AND (wins::numeric / NULLIF(games_played, 0)) >= 0.70
         ORDER BY win_rate DESC, games_played DESC
@@ -1804,7 +1675,7 @@ app.use((err, _req, res, _next) => {
 // ---------------------------------------------------------------------
 if (require.main === module) {
   const server = app.listen(PORT, () => {
-    console.log(`[startup] Coinflip Gold API v1.1 listening on :${PORT} (${NODE_ENV})`);
+    console.log(`[startup] Coinflip LB API v1.3 listening on :${PORT} (${NODE_ENV})`);
     console.log(`[startup] STARTING_BALANCE = ${STARTING_BALANCE}`);
     console.log(`[startup] FRONTEND_ORIGIN  = ${FRONTEND_ORIGIN || '(none set — only localhost allowed)'}`);
     console.log(`[startup] OPEN_GAME_TTL_HOURS = ${OPEN_GAME_TTL_HOURS}`);
