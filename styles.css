@@ -489,10 +489,20 @@ body[data-view="auth"] main {
   font-family: var(--font-mono);
 }
 .prefix-input input {
-  flex: 1 1 auto;
-  border-top-left-radius: 0;
-  border-bottom-left-radius: 0;
-  width: 100%;
+  background: var(--bg-elev-2);
+  border: 1px solid var(--line);
+  color: var(--text);
+}
+
+.prefix-input input::placeholder {
+  color: var(--text-mute);
+}
+
+.prefix-input input:focus {
+  outline: none;
+  border-color: var(--primary);
+  background: var(--bg-elev);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 25%, transparent);
 }
 .prefix-input-sm .prefix { padding: 0 9px; font-size: 12px; }
 .prefix-input-sm input   { padding: 8px 12px; font-size: 13px; }
