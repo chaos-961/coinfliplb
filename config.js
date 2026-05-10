@@ -20,5 +20,6 @@ window.CONFIG = Object.freeze({
   // Polling fallback when WebSockets / SSE are unavailable.
   POLLING_INTERVAL_MS: 4000,
 
-  APP_VERSION: "v1.4",
+  // Add 0.0.1 when updating
+  APP_VERSION: "v1.5.0",
 });

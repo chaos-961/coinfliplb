@@ -739,7 +739,7 @@ body[data-theme="light"] .form-feedback.is-info { color: var(--primary-deep); }
   color: var(--text-dim);
 }
 .filters {
-  display: flex; flex-wrap: wrap; align-items: end; gap: 8px;
+  display: flex; flex-wrap: wrap; align-items: end; gap: 12px;
 }
 .filter-label {
   display: block;
