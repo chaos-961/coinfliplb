@@ -21,5 +21,5 @@ window.CONFIG = Object.freeze({
   POLLING_INTERVAL_MS: 4000,
 
   // Add 0.0.1 when updating
-  APP_VERSION: "v1.5.0",
+  APP_VERSION: "v1.5.1-compliance",
 });

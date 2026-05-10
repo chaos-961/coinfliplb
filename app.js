@@ -3,7 +3,7 @@
    ---------------------------------------------------------------------
    Single-file SPA logic. No frameworks. Cleaned up from v1.3:
    - Fixed flip result text (no "You Lost!" in the Gold change row)
-   - Fixed wager-input placeholder text
+   - Fixed entry-input placeholder text
    - Aligned status class names with the rebuilt stylesheet
    - Removed double-toast (showFeedback no longer also fires a toast)
    - Removed dead reference to lost-card sign-out (button removed in HTML)
@@ -99,6 +99,7 @@
       signupUsername:   $('#signup-username'),
       signupPassword:   $('#signup-password'),
       signupConfirm:    $('#signup-confirm'),
+      signupAgeConfirm: $('#signup-age-confirm'),
       passwordMeter:    $('#password-meter'),
       passwordMeterFill:$('#password-meter-fill'),
       passwordMeterText:$('#password-meter-text'),
@@ -117,8 +118,8 @@
       resultBannerClose: $('#result-banner-close'),
 
       formCreateGame: $('#form-create-game'),
-      wagerInput:     $('#wager-input'),
-      wagerHint:      $('#wager-hint'),
+      wagerInput:     $('#entry-input'),
+      wagerHint:      $('#entry-hint'),
       createBtn:      $('#create-btn'),
       createFeedback: $('#create-feedback'),
 
@@ -534,7 +535,7 @@
     if (els.lostCard) els.lostCard.hidden = !lost;
 
     if (els.createFeedback && lost) {
-      showFeedback(els.createFeedback, "You're out of Gold. You can still browse games and the leaderboard. Sign out and create a new account to play again.", 'error');
+      showFeedback(els.createFeedback, "You're out of Fun Gold. You can still browse rounds and the leaderboard. Sign out and create a new account to play again.", 'error');
     } else if (els.createFeedback && !lost && /out of Gold|reached 0 Gold/i.test(els.createFeedback.textContent || '')) {
       clearFeedback(els.createFeedback);
     }
@@ -585,11 +586,11 @@
     if (max >= min) {
       els.wagerInput.placeholder = `${compactMoney(min)} – ${compactMoney(max)}`;
     } else if (lost) {
-      els.wagerInput.placeholder = 'Out of Gold';
+      els.wagerInput.placeholder = 'Out of Fun Gold';
     } else if (hasOwnOpenGames()) {
-      els.wagerInput.placeholder = 'Gold reserved';
+      els.wagerInput.placeholder = 'Fun Gold reserved';
     } else {
-      els.wagerInput.placeholder = 'No Gold available';
+      els.wagerInput.placeholder = 'No Fun Gold available';
     }
 
     const createDisabled = lost || unavailable;
@@ -675,7 +676,7 @@
     els.topbar.hidden = false;
     els.balancePill.hidden = false;
     els.balanceValue.textContent = formatMoney(state.user.balance);
-    els.balancePill.setAttribute('aria-label', `Gold balance ${formatMoney(state.user.balance)}`);
+    els.balancePill.setAttribute('aria-label', `Fun Gold balance ${formatMoney(state.user.balance)}`);
     els.userName.hidden = false;
     els.userName.textContent = state.user.username;
     if (els.onlinePill) els.onlinePill.hidden = false;
@@ -755,6 +756,11 @@
     if (password !== confirm) {
       showFeedback(els.signupFeedback, "Passwords don't match.", 'error');
       els.signupConfirm.focus();
+      return;
+    }
+    if (els.signupAgeConfirm && !els.signupAgeConfirm.checked) {
+      showFeedback(els.signupFeedback, 'Please confirm you are 18+ and understand Fun Gold has no cash value, prizes, deposits, or withdrawals.', 'error');
+      els.signupAgeConfirm.focus();
       return;
     }
 
@@ -962,7 +968,7 @@
     if (state.filters.maxWager != null) params.set('maxWager', state.filters.maxWager);
 
     try {
-      if (!options.silent) setListLoading('games', true, 'Loading open games…');
+      if (!options.silent) setListLoading('games', true, 'Loading open rounds…');
       const data = await api(`/api/games?${params.toString()}`);
       const games = data.games || [];
       const meta = normalizeMeta(data, games, page, limit);
@@ -1016,7 +1022,7 @@
         if (coinText) coinText.textContent = side === 'heads' ? 'H' : 'T';
       }
       $('.pick-label', node).textContent = capitalize(g.creator_choice);
-      $('.game-row-wager', node).textContent = formatMoney(g.wager);
+      $('.game-row-entry', node).textContent = formatMoney(g.wager);
 
       const joinBtn = $('.game-row-join', node);
       const isOwn = (g.creator_id === myId);
@@ -1027,12 +1033,12 @@
           joinBtn.textContent = 'Cancel';
           joinBtn.classList.remove('btn-primary');
           joinBtn.classList.add('btn-danger');
-          joinBtn.setAttribute('aria-label', 'Cancel your open game');
+          joinBtn.setAttribute('aria-label', 'Cancel your open round');
           on(joinBtn, 'click', () => handleCancelGame(g.id, joinBtn));
         } else if (lost) {
           joinBtn.disabled = true;
           joinBtn.textContent = 'Locked';
-          joinBtn.title = 'You can browse, but cannot play after reaching 0 Gold.';
+          joinBtn.title = 'You can browse, but cannot play after reaching 0 Fun Gold.';
         } else if (insufficient) {
           joinBtn.disabled = true;
           joinBtn.textContent = 'Insufficient';
@@ -1069,7 +1075,7 @@
     try {
       const page = options.forNotification ? 1 : state.pages.my;
       const limit = options.forNotification ? 20 : state.pageSize.my;
-      if (!options.silent) setListLoading('my', true, 'Loading your games…');
+      if (!options.silent) setListLoading('my', true, 'Loading your rounds…');
       const data = await api(`/api/me/games?page=${page}&limit=${limit}`);
       const games = data.games || [];
       const meta = normalizeMeta(data, games, page, limit);
@@ -1133,12 +1139,12 @@
         if (isCreator && cancelBtn) {
           cancelBtn.hidden = false;
           cancelBtn.disabled = false;
-          cancelBtn.title = 'Cancel this game and refund your wager.';
+          cancelBtn.title = 'Cancel this round and release your reserved Fun Gold.';
           on(cancelBtn, 'click', () => handleCancelGame(g.id, cancelBtn));
         }
       } else if (g.status === 'completed') {
         const won = (g.winner_id === myId);
-        status.textContent = won ? 'Won' : 'Lost';
+        status.textContent = won ? 'Success' : 'Ended';
         status.classList.add(won ? 'status-win' : 'status-loss');
 
         detail.innerHTML = '';
@@ -1259,12 +1265,12 @@
     }
 
     els.resultBannerTitle.textContent = won
-      ? `You won ${formatMoney(wager * 2)}!`
-      : `You lost ${formatMoney(wager)}.`;
+      ? `Round complete: +${formatMoney(wager * 2)}`
+      : `Round complete: −${formatMoney(wager)}`;
 
     els.resultBannerSub.innerHTML = '';
     const a = document.createElement('span');
-    a.textContent = `Game vs `;
+    a.textContent = `Round vs `;
     const b = document.createElement('strong');
     b.textContent = opponent || 'opponent';
     const c = document.createElement('span');
@@ -1275,7 +1281,7 @@
 
     els.resultBanner.hidden = false;
     showToast(
-      won ? `You won ${formatMoney(wager * 2)}!` : `You lost ${formatMoney(wager)}.`,
+      won ? `Round complete: +${formatMoney(wager * 2)}` : `Round complete: −${formatMoney(wager)}`,
       won ? 'success' : 'error',
       { timeout: 6000 }
     );
@@ -1353,7 +1359,7 @@
     clearFeedback(els.createFeedback);
 
     if (isEliminated()) {
-      showFeedback(els.createFeedback, "You're out of Gold and can't create a game.", 'error');
+      showFeedback(els.createFeedback, "You're out of Fun Gold and can't create a round.", 'error');
       return;
     }
     sanitizeIntegerInput(els.wagerInput, { clampMax: true });
@@ -1367,15 +1373,15 @@
     const minWager = getMinWager();
     const maxWager = getMaxAllowedWager();
     if (wager === null || wager < minWager || wager > maxWager) {
-      showFeedback(els.createFeedback, `Wager must be between ${compactMoney(minWager)} and ${compactMoney(maxWager)}.`, 'error');
+      showFeedback(els.createFeedback, `Fun Gold entry must be between ${compactMoney(minWager)} and ${compactMoney(maxWager)}.`, 'error');
       return;
     }
 
     if (state.user && wager >= 100 && wager >= Math.floor(Number(state.user.balance) * 0.5)) {
       const ok = await confirmModal({
-        title: 'Confirm wager',
-        body: `You're wagering ${formatMoney(wager)} — that's a big chunk of your balance. Continue?`,
-        confirmText: 'Wager it',
+        title: 'Confirm Fun Gold entry',
+        body: `You're using ${formatMoney(wager)} of virtual Fun Gold for this round. Continue?`,
+        confirmText: 'Use Fun Gold',
         cancelText: 'Back',
         danger: false,
       });
@@ -1401,8 +1407,8 @@
       els.wagerInput.value = '';
       els.formCreateGame.querySelectorAll('input[name="choice"]').forEach(input => { input.checked = false; });
       updateWagerLimitUI();
-      showFeedback(els.createFeedback, 'Game created. Waiting for an opponent…', 'success');
-      showToast('Game created. Waiting for an opponent…', 'success', { timeout: 3500 });
+      showFeedback(els.createFeedback, 'Round created. Waiting for another player…', 'success');
+      showToast('Round created. Waiting for another player…', 'success', { timeout: 3500 });
       refreshOpenGames();
       refreshMyGames();
       refreshMe();
@@ -1420,10 +1426,10 @@
     const finishAction = beginClientAction(`cancel-game:${gameId}`, CLIENT_ACTION_COOLDOWNS.cancel, 'Cancelling too fast');
     if (!finishAction) return;
     const ok = await confirmModal({
-      title: 'Cancel game?',
-      body: 'Cancel this open game and refund the wager? You can always create a new one.',
-      confirmText: 'Cancel game',
-      cancelText: 'Keep game',
+      title: 'Cancel round?',
+      body: 'Cancel this open round and release the reserved Fun Gold? You can always create a new one.',
+      confirmText: 'Cancel round',
+      cancelText: 'Keep round',
       danger: true,
     });
     if (!ok) { finishAction(); return; }
@@ -1436,7 +1442,7 @@
         await refreshOwnOpenGamesCount();
         updateTopbar();
       }
-      showToast('Game cancelled and wager refunded.', 'success', { timeout: 3500 });
+      showToast('Round cancelled and reserved Fun Gold released.', 'success', { timeout: 3500 });
       refreshOpenGames().catch(() => {});
       refreshMyGames().catch(() => {});
     } catch (err) {
@@ -1450,7 +1456,7 @@
 
   async function handleJoinGame(gameId, wager, btn) {
     if (isEliminated()) {
-      showToast("You're out of Gold and can't join games.", 'error');
+      showToast("You're out of Fun Gold and can't join rounds.", 'error');
       return;
     }
     if (state.isFlipping) return;
@@ -1459,9 +1465,9 @@
 
     if (state.user && Number(wager) >= 100 && Number(wager) >= Math.floor(Number(state.user.balance) * 0.5)) {
       const ok = await confirmModal({
-        title: 'Join this flip?',
-        body: `${formatMoney(wager)} on the line. Win or lose, the result is final.`,
-        confirmText: 'Flip it',
+        title: 'Join this round?',
+        body: `${formatMoney(wager)} of virtual Fun Gold for this round. The result is final.`,
+        confirmText: 'Join round',
         cancelText: 'Back',
         danger: false,
       });
@@ -1497,7 +1503,7 @@
     state.lastBannerGameId = g.id;
     lastModalGameId = g.id;
 
-    openFlipModal({ title: 'Someone joined your game!', sub: `${g.joiner_username || 'A player'} took your bet…` });
+    openFlipModal({ title: 'Someone joined your round!', sub: `${g.joiner_username || 'A player'} joined your round…` });
 
     try {
       await wait(550);
@@ -1579,7 +1585,7 @@
     els.flipSub.textContent = won ? 'You won!' : 'You lost.';
     els.resultSide.textContent    = capitalize(game.result);
     els.resultPick.textContent    = capitalize(myPick);
-    els.resultOutcome.textContent = won ? 'You won' : 'You lost';
+    els.resultOutcome.textContent = won ? 'Round success' : 'Round ended';
     els.resultAmount.textContent  = won ? `+${formatMoney(wager * 2)}` : `−${formatMoney(wager)}`;
     els.resultBalance.textContent = formatMoney(newBalance);
 

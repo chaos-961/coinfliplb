@@ -1,23 +1,15 @@
-# Coinflip LB frontend (v1.4)
+# Coinflip LB frontend — compliance copy update
 
-Static site. Drop these files on any static host (GitHub Pages,
-Netlify, Cloudflare Pages, Vercel, plain Nginx).
+Static frontend files only. Backend/API files were not changed.
 
-## Files
+## What changed
 
-- `index.html` — markup
-- `styles.css` — single-source-of-truth stylesheet (rewritten for v1.4)
-- `app.js` — SPA logic
-- `config.js` — runtime config; **edit `API_BASE_URL` to point at your backend**
-- `CNAME` — only used by GitHub Pages for a custom domain
+- Replaced risky visible copy that could imply real-money or prize play with entertainment-only Fun Gold wording.
+- Added 18+ and no-real-money/no-cash-value/no-prize disclosures on the landing screen, dashboard, and footer.
+- Added a signup confirmation checkbox for 18+ and Fun Gold-only acknowledgement.
+- Added static `terms.html`, `privacy.html`, and `responsible-play.html` pages.
+- Kept the game mechanics and backend API contract unchanged.
 
 ## Deploy
 
-1. Edit `config.js` and set `API_BASE_URL` to your deployed backend URL
-   (e.g. `https://coinfliplb-production.up.railway.app`).
-2. Push these files as the root of your `gh-pages` (or production)
-   branch, or drop them into your hosting provider's static deploy.
-3. Make sure the backend's `FRONTEND_ORIGIN` env var includes your
-   frontend's origin (e.g. `https://coinfliplb.com`).
-
-That's it — no build step, no bundler.
+Upload these files to your static frontend host as before. Make sure `config.js` still points to your backend API and the backend `FRONTEND_ORIGIN` includes your frontend domain.

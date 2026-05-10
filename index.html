@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#0a0d18" />
-  <meta name="description" content="A friendly gold coinflip arena. Play with friends, climb the leaderboard. No real money." />
+  <meta name="description" content="18+ entertainment-only coinflip game using virtual Fun Gold. No real money, cash value, deposits, withdrawals, or prizes." />
   <title>Coinflip LB</title>
 
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3CradialGradient id='g' cx='30%25' cy='30%25'%3E%3Cstop offset='0' stop-color='%23ffe084'/%3E%3Cstop offset='0.6' stop-color='%23f5b301'/%3E%3Cstop offset='1' stop-color='%23a87a00'/%3E%3C/radialGradient%3E%3C/defs%3E%3Ccircle cx='32' cy='32' r='28' fill='url(%23g)' stroke='%236e5000' stroke-width='2'/%3E%3Ctext x='32' y='42' font-family='system-ui,sans-serif' font-size='28' font-weight='800' text-anchor='middle' fill='%236e5000'%3EG%3C/text%3E%3C/svg%3E" />
@@ -84,7 +84,7 @@
         </div>
 
         <h1 class="auth-title">Coinflip LB</h1>
-        <p class="auth-subtitle">A fast coinflip arena. Pick a side, wager your gold, climb the leaderboard.</p>
+        <p class="auth-subtitle">An 18+ entertainment-only coin toss game using virtual Fun Gold. No real money, cash value, deposits, withdrawals, or prizes.</p>
 
         <div class="tabs auth-tabs" role="tablist">
           <button class="tab is-active" data-auth-tab="login" role="tab" aria-selected="true">Sign in</button>
@@ -167,11 +167,19 @@
               required
             />
           </label>
+          <label class="check-field compliance-check">
+            <input type="checkbox" id="signup-age-confirm" required />
+            <span>I confirm I am 18+ and understand Fun Gold is virtual only: no cash value, deposits, withdrawals, or prizes.</span>
+          </label>
           <button type="submit" class="btn btn-primary btn-lg btn-block" id="signup-btn">Create account</button>
           <p class="form-feedback" id="signup-feedback" hidden></p>
         </form>
 
-        <p class="auth-fineprint">Call it. Flip it. Win gold. Climb the leaderboard.</p>
+        <p class="auth-fineprint">18+ only · Entertainment-only · Fun Gold has no cash value · No prizes, deposits, withdrawals, or real-money play.</p>
+
+        <div class="compliance-note" role="note">
+          <strong>Important:</strong> Coinflip LB is a casual entertainment game using virtual Fun Gold only. It is not gambling, does not accept payments, and does not award money or prizes.
+        </div>
       </div>
     </section>
 
@@ -195,15 +203,20 @@
         <div class="lost-coin" aria-hidden="true">0G</div>
         <div class="lost-copy">
           <h2>Out of Gold</h2>
-          <p>You're at 0 Gold. You can still browse open games, the leaderboard, and cancel your own open games to free escrowed Gold. Create / join are locked until your balance is positive.</p>
+          <p>You're at 0 Fun Gold. You can still browse open rounds, the leaderboard, and cancel your own open rounds to release reserved Fun Gold. Creating or joining rounds is locked until your balance is positive.</p>
         </div>
       </div>
 
-      <!-- Create a game -->
+      <div class="card compliance-card" role="note">
+        <strong>Entertainment-only notice</strong>
+        <p>Coinflip LB uses virtual Fun Gold only. Fun Gold cannot be bought, sold, withdrawn, transferred for value, or redeemed for money or prizes. 18+ only.</p>
+      </div>
+
+      <!-- Create a round -->
       <div class="card create-card">
         <div class="card-header">
-          <h2 class="card-title">Create a game</h2>
-          <p class="card-subtitle">Pick a side, set a wager, wait for someone to join.</p>
+          <h2 class="card-title">Create a round</h2>
+          <p class="card-subtitle">Pick heads or tails, choose a Fun Gold entry amount, and wait for another player to join.</p>
         </div>
 
         <form class="create-form" id="form-create-game" novalidate>
@@ -225,23 +238,23 @@
           </div>
 
           <label class="field">
-            <span class="field-label">Wager</span>
+            <span class="field-label">Fun Gold entry</span>
             <div class="prefix-input">
               <span class="prefix">G</span>
               <input
                 type="text"
-                id="wager-input"
-                name="wager"
+                id="entry-input"
+                name="entry"
                 inputmode="numeric"
                 pattern="[0-9]*"
                 placeholder="Enter amount"
                 required
               />
             </div>
-            <span class="field-hint" id="wager-hint" hidden></span>
+            <span class="field-hint" id="entry-hint" hidden></span>
           </label>
 
-          <button type="submit" class="btn btn-primary btn-lg btn-block" id="create-btn">Create game</button>
+          <button type="submit" class="btn btn-primary btn-lg btn-block" id="create-btn">Create round</button>
           <p class="form-feedback" id="create-feedback" hidden></p>
         </form>
       </div>
@@ -282,7 +295,7 @@
 
         <div class="rows" id="games-rows" aria-busy="true"></div>
         <div class="empty-state" id="games-empty" hidden>
-          No open games right now. Be the first — create one above.
+          No open rounds right now. Be the first — create one above.
         </div>
         <div class="loading-row loading-card" id="games-loading" aria-live="polite">
           <div class="skeleton-row"><span class="skeleton-dot"></span><span class="skeleton-line"></span><span class="skeleton-pill"></span></div>
@@ -299,12 +312,12 @@
       <!-- Tab panel: my games -->
       <div class="tab-panel" id="panel-my" role="tabpanel" hidden>
         <div class="panel-toolbar">
-          <div class="panel-info">Your recent games — newest first.</div>
+          <div class="panel-info">Your recent rounds — newest first.</div>
           <button type="button" class="btn btn-ghost btn-sm" id="refresh-my" aria-label="Refresh">↻ Refresh</button>
         </div>
         <div class="rows" id="my-rows"></div>
         <div class="empty-state" id="my-empty" hidden>
-          You haven't played a game yet. Create one above to get started.
+          You haven't played a round yet. Create one above to get started.
         </div>
         <div class="loading-row loading-card" id="my-loading" hidden aria-live="polite">
           <div class="skeleton-row"><span class="skeleton-dot"></span><span class="skeleton-line"></span><span class="skeleton-pill"></span></div>
@@ -321,7 +334,7 @@
       <!-- Tab panel: leaderboard -->
       <div class="tab-panel" id="panel-leaderboard" role="tabpanel" hidden>
         <div class="panel-toolbar">
-          <div class="panel-info">Top 100 players by gold. Showing 20 per page.</div>
+          <div class="panel-info">Top 100 players by virtual Fun Gold balance. Showing 20 per page.</div>
           <button type="button" class="btn btn-ghost btn-sm" id="refresh-lb" aria-label="Refresh">↻ Refresh</button>
         </div>
         <div class="rows leaderboard-rows" id="lb-rows"></div>
@@ -343,7 +356,13 @@
   <footer class="app-footer" aria-label="App info">
     <span class="app-footer-version">v1.4</span>
     <span class="app-footer-sep" aria-hidden="true">·</span>
-    <span class="app-footer-fineprint">Fun Gold only — no real money.</span>
+    <span class="app-footer-fineprint">18+ · Entertainment only · Fun Gold has no cash value · No real money, prizes, deposits, or withdrawals</span>
+    <span class="app-footer-sep" aria-hidden="true">·</span>
+    <a href="terms.html">Terms</a>
+    <span class="app-footer-sep" aria-hidden="true">·</span>
+    <a href="responsible-play.html">Responsible Play</a>
+    <span class="app-footer-sep" aria-hidden="true">·</span>
+    <a href="privacy.html">Privacy</a>
   </footer>
 
   <!-- =============================================================== -->
@@ -368,9 +387,9 @@
       <div class="flip-result" id="flip-result" hidden>
         <div class="result-row"><span class="result-key">Result</span><span class="result-val" id="result-side">—</span></div>
         <div class="result-row"><span class="result-key">Your pick</span><span class="result-val" id="result-pick">—</span></div>
-        <div class="result-row"><span class="result-key">Outcome</span><span class="result-val" id="result-outcome">—</span></div>
-        <div class="result-row"><span class="result-key">Gold change</span><span class="result-val" id="result-amount">0 Gold</span></div>
-        <div class="result-row"><span class="result-key">Gold now</span><span class="result-val" id="result-balance">0 Gold</span></div>
+        <div class="result-row"><span class="result-key">Round result</span><span class="result-val" id="result-outcome">—</span></div>
+        <div class="result-row"><span class="result-key">Fun Gold change</span><span class="result-val" id="result-amount">0 Gold</span></div>
+        <div class="result-row"><span class="result-key">Fun Gold now</span><span class="result-val" id="result-balance">0 Gold</span></div>
         <button class="btn btn-primary btn-block btn-lg" id="flip-close-btn">Done</button>
       </div>
     </div>
@@ -431,8 +450,8 @@
         <div class="static-coin static-coin-xs game-pick-coin" aria-hidden="true"><span>H</span></div>
         <span class="pick-label"></span>
       </div>
-      <div class="game-row-wager"></div>
-      <button type="button" class="btn btn-primary btn-sm game-row-join">Join</button>
+      <div class="game-row-entry"></div>
+      <button type="button" class="btn btn-primary btn-sm game-row-join">Join round</button>
     </div>
   </template>
 
