@@ -1,24 +1,17 @@
 /* =====================================================================
-   Coinflip LB — app.js (v1.3)
+   Coinflip LB — app.js (v1.4)
    ---------------------------------------------------------------------
-   Single-file SPA logic. No frameworks.
-   - Inline feedback (no toast popups)
-   - Auth view default, with confirm-password on signup
-   - Dashboard with tabs: Open games / My games / Leaderboard
-   - Result banner when one of the user's open games is joined+completed
-   - Multi-stage 3D coin flip animation
-   - Creator-side flip animation when their game is joined
-   - In-app confirm modal (no native confirm())
-   - Runtime config pulled from /api/config
-   - 0-balance users CAN cancel their own open games (only create/join blocked)
-   - Locked-Gold pill shows escrowed total when the user has open games
+   Single-file SPA logic. No frameworks. Cleaned up from v1.3:
+   - Fixed flip result text (no "You Lost!" in the Gold change row)
+   - Fixed wager-input placeholder text
+   - Aligned status class names with the rebuilt stylesheet
+   - Removed double-toast (showFeedback no longer also fires a toast)
+   - Removed dead reference to lost-card sign-out (button removed in HTML)
+   - Cleaner button loading state (CSS spinner instead of replacing text)
    ===================================================================== */
 (function () {
   'use strict';
 
-  // -------------------------------------------------------------------
-  // Constants & state
-  // -------------------------------------------------------------------
   const CONFIG = window.CONFIG;
   if (!CONFIG || !CONFIG.API_BASE_URL) {
     console.error('CONFIG missing or invalid. Check config.js loads before app.js.');
@@ -30,8 +23,6 @@
   const SEEN_COMPLETED_PREFIX = 'cfa_seen_completed_';
   const PENDING_CREATED_PREFIX = 'cfa_pending_created_';
 
-  // Client-side abuse protection. Server remains the source of truth; these
-  // guards prevent accidental double actions and reduce needless traffic.
   const CLIENT_ACTION_COOLDOWNS = {
     create: 2600,
     join: 1900,
@@ -42,7 +33,6 @@
   const pendingActions = new Set();
   const pendingGetRequests = new Map();
 
-  // Keep auth tokens in sessionStorage so closing the browser clears the session.
   const tokenStorage = window.sessionStorage;
   function loadStoredToken() {
     return tokenStorage.getItem(TOKEN_KEY) || null;
@@ -68,72 +58,36 @@
     pendingCreatedGameIds: null,
     lastBannerGameId: null,
     ownOpenGamesCount: null,
-    ownLockedGold:    0,           // v1.3: total Gold escrowed in this user's open games
+    ownLockedGold:    0,
     theme:          localStorage.getItem(THEME_KEY) || 'dark',
     runtimeConfig:  null,
   };
 
-  // -------------------------------------------------------------------
-  // DOM helpers
-  // -------------------------------------------------------------------
   const $  = (s, root = document) => root.querySelector(s);
   const $$ = (s, root = document) => Array.from(root.querySelectorAll(s));
   const els = {};
 
   function on(el, eventName, handler, options) {
-    if (!el) {
-      console.warn(`[wireEvents] Missing element for ${eventName}; listener was skipped.`);
-      return;
-    }
+    if (!el) return;
     el.addEventListener(eventName, handler, options);
-  }
-
-  function assertRequiredElements() {
-    const required = [
-      'topbar', 'balancePill', 'balanceValue', 'userName', 'logoutBtn',
-      'viewAuth', 'viewDashboard',
-      'formLogin', 'formSignup', 'loginUsername', 'loginPassword',
-      'signupUsername', 'signupPassword', 'signupConfirm', 'loginBtn', 'signupBtn',
-      'loginFeedback', 'signupFeedback',
-      'resultBanner', 'resultBannerTitle', 'resultBannerSub', 'resultBannerClose',
-      'formCreateGame', 'wagerInput', 'wagerHint', 'createBtn', 'createFeedback',
-      'gamesRows', 'gamesEmpty', 'gamesLoading', 'filterMin', 'filterMax',
-      'applyFilters', 'clearFilters', 'refreshGames',
-      'gamesPager', 'gamesPrev', 'gamesNext', 'gamesPageInfo',
-      'myRows', 'myEmpty', 'myLoading', 'refreshMy',
-      'myPager', 'myPrev', 'myNext', 'myPageInfo',
-      'lbRows', 'lbEmpty', 'lbLoading', 'refreshLb',
-      'lbPager', 'lbPrev', 'lbNext', 'lbPageInfo',
-      'flipModal', 'flipCoin', 'flipCoinInner', 'flipSub', 'flipResult', 'flipTitle',
-      'resultSide', 'resultPick', 'resultOutcome', 'resultAmount', 'resultBalance',
-      'flipCloseBtn', 'tplGameRow', 'tplMyRow', 'tplLbRow',
-      'confirmModal', 'confirmTitle', 'confirmBody', 'confirmYes', 'confirmNo',
-    ];
-    const missing = required.filter(name => !els[name]);
-    if (missing.length) {
-      console.error(`[boot] Missing required DOM element(s): ${missing.join(', ')}. Check index.html IDs/classes.`);
-      return false;
-    }
-    return true;
   }
 
   function captureElements() {
     Object.assign(els, {
-      topbar:        $('#topbar'),
-      brandName:     $('#brand-name'),
-      balancePill:   $('#balance-pill'),
-      balanceValue:  $('#balance-value'),
-      userName:      $('#user-name'),
-      onlinePill:    $('#online-pill'),
-      onlineCount:   $('#online-count'),
-      logoutBtn:     $('#logout-btn'),
-      themeToggle:   $('#theme-toggle'),
-      themeToggleAuth: $('#theme-toggle-auth'),
-      themeIconPath: $('#theme-icon-path'),
-      themeIconPathAuth: $('#theme-icon-path-auth'),
-      toastStack:    $('#toast-stack'),
-      lostCard:      $('#lost-card'),
-      lostSignout:   $('#lost-signout'),
+      topbar:           $('#topbar'),
+      brandName:        $('#brand-name'),
+      balancePill:      $('#balance-pill'),
+      balanceValue:     $('#balance-value'),
+      userName:         $('#user-name'),
+      onlinePill:       $('#online-pill'),
+      onlineCount:      $('#online-count'),
+      logoutBtn:        $('#logout-btn'),
+      themeToggle:      $('#theme-toggle'),
+      themeToggleAuth:  $('#theme-toggle-auth'),
+      themeIconPath:    $('#theme-icon-path'),
+      themeIconPathAuth:$('#theme-icon-path-auth'),
+      toastStack:       $('#toast-stack'),
+      lostCard:         $('#lost-card'),
 
       viewAuth:      $('#view-auth'),
       viewDashboard: $('#view-dashboard'),
@@ -145,9 +99,9 @@
       signupUsername:   $('#signup-username'),
       signupPassword:   $('#signup-password'),
       signupConfirm:    $('#signup-confirm'),
-      passwordMeter:   $('#password-meter'),
-      passwordMeterFill: $('#password-meter-fill'),
-      passwordMeterText: $('#password-meter-text'),
+      passwordMeter:    $('#password-meter'),
+      passwordMeterFill:$('#password-meter-fill'),
+      passwordMeterText:$('#password-meter-text'),
       loginBtn:         $('#login-btn'),
       signupBtn:        $('#signup-btn'),
       loginFeedback:    $('#login-feedback'),
@@ -170,7 +124,7 @@
 
       mainTabs:    $$('.main-tabs .tab'),
       authTabs:    $$('.auth-tabs .tab'),
-      myGamesBadge: $('#my-games-badge'),
+      myGamesBadge:$('#my-games-badge'),
 
       panelLobby:       $('#panel-lobby'),
       panelMy:          $('#panel-my'),
@@ -220,16 +174,16 @@
       resultBalance: $('#result-balance'),
       flipCloseBtn:  $('#flip-close-btn'),
 
-      profileModal: $('#profile-modal'),
-      profileTitle: $('#profile-title'),
-      profileClose: $('#profile-close'),
-      profileBalance: $('#profile-balance'),
-      profileAge: $('#profile-age'),
-      profileStreak: $('#profile-streak'),
-      profileMaxStreak: $('#profile-max-streak'),
-      profileRecord: $('#profile-record'),
-      profileRatio: $('#profile-ratio'),
-      profileNote: $('#profile-note'),
+      profileModal:    $('#profile-modal'),
+      profileTitle:    $('#profile-title'),
+      profileClose:    $('#profile-close'),
+      profileBalance:  $('#profile-balance'),
+      profileAge:      $('#profile-age'),
+      profileStreak:   $('#profile-streak'),
+      profileMaxStreak:$('#profile-max-streak'),
+      profileRecord:   $('#profile-record'),
+      profileRatio:    $('#profile-ratio'),
+      profileNote:     $('#profile-note'),
 
       confirmModal: $('#confirm-modal'),
       confirmTitle: $('#confirm-title'),
@@ -242,64 +196,43 @@
       tplLbRow:   $('#tpl-lb-row'),
     });
 
-    if (els.brandName) els.brandName.textContent = CONFIG.APP_NAME;
+    if (els.brandName) els.brandName.textContent = CONFIG.APP_NAME || 'Coinflip LB';
   }
 
-  // -------------------------------------------------------------------
-  // Motion-only feedback — no sound system by design
-  // -------------------------------------------------------------------
-  function startFlipTicks() {}
-  function stopFlipTicks() {}
-  function playLandSound() {}
-  function playWinSound() {}
-  function playLossSound() {}
-  function playClick() {}
-
-  // -------------------------------------------------------------------
-  // Lightweight client throttling / cache helpers
-  // -------------------------------------------------------------------
+  // ---------- Throttling ----------
   function remainingCooldownMs(key) {
     return Math.max(0, (actionCooldowns.get(key) || 0) - Date.now());
   }
-
   function startClientCooldown(key, ms, message) {
     if (!key || !ms) return true;
     const remaining = remainingCooldownMs(key);
     if (remaining > 0) {
-      if (message) notify(`${message} (${Math.ceil(remaining / 1000)}s)`, 'info', { timeout: 2200 });
+      if (message) showToast(`${message} (${Math.ceil(remaining / 1000)}s)`, 'info', { timeout: 2200 });
       return false;
     }
     actionCooldowns.set(key, Date.now() + ms);
     return true;
   }
-
   function beginClientAction(key, ms, message) {
     if (pendingActions.has(key)) {
-      if (message) notify(message, 'info', { timeout: 2200 });
+      if (message) showToast(message, 'info', { timeout: 2200 });
       return null;
     }
     if (!startClientCooldown(key, ms, message)) return null;
     pendingActions.add(key);
     return () => pendingActions.delete(key);
   }
-
-  function clearClientReadCache() {
-    pendingGetRequests.clear();
-  }
-
+  function clearClientReadCache() { pendingGetRequests.clear(); }
   function cloneJson(value) {
     if (value == null) return value;
     try { return structuredClone(value); } catch { return JSON.parse(JSON.stringify(value)); }
   }
-
   function runThrottled(key, ms, fn) {
     if (!startClientCooldown(`refresh:${key}`, ms || CLIENT_ACTION_COOLDOWNS.refresh, 'Refreshing too fast')) return;
     return fn();
   }
 
-  // -------------------------------------------------------------------
-  // API helper
-  // -------------------------------------------------------------------
+  // ---------- API ----------
   class ApiError extends Error {
     constructor(message, status, data) {
       super(message);
@@ -317,10 +250,7 @@
       return cloneJson(await pendingGetRequests.get(dedupeKey));
     }
 
-    const headers = Object.assign(
-      { 'Accept': 'application/json' },
-      opts.headers || {}
-    );
+    const headers = Object.assign({ 'Accept': 'application/json' }, opts.headers || {});
     if (opts.body && !(opts.body instanceof FormData)) {
       headers['Content-Type'] = headers['Content-Type'] || 'application/json';
     }
@@ -331,22 +261,15 @@
     const performRequest = (async () => {
       let res;
       try {
-        res = await fetch(API + path, {
-          method,
-          headers,
-          body:    opts.body,
-          cache:   'no-store',
-        });
-      } catch (err) {
+        res = await fetch(API + path, { method, headers, body: opts.body, cache: 'no-store' });
+      } catch {
         throw new ApiError("Couldn't reach the server. Check your connection and try again.", 0, null);
       }
-
       let data = null;
       const ct = res.headers.get('content-type') || '';
       if (ct.includes('application/json')) {
         try { data = await res.json(); } catch { data = null; }
       }
-
       if (!res.ok) {
         const msg = (data && data.error) ? data.error : `Request failed (${res.status})`;
         if (res.status === 401 && state.token) {
@@ -355,7 +278,7 @@
           showFeedback(els.loginFeedback, 'Your session expired. Please sign in again.', 'info');
         }
         if (res.status === 429) {
-          notify(msg || 'Slow down a bit.', 'error', { timeout: 4200 });
+          showToast(msg || 'Slow down a bit.', 'error', { timeout: 4200 });
         }
         throw new ApiError(msg, res.status, data);
       }
@@ -370,16 +293,13 @@
     }
   }
 
-  // -------------------------------------------------------------------
-  // Inline feedback
-  // -------------------------------------------------------------------
+  // ---------- Inline feedback (NO automatic toast) ----------
   function showFeedback(el, message, type = 'info') {
     if (!el || !message) return;
     el.textContent = message;
     el.classList.remove('is-error', 'is-success', 'is-info');
     el.classList.add(`is-${type}`);
     el.hidden = false;
-    notify(message, type);
   }
   function clearFeedback(el) {
     if (!el) return;
@@ -388,8 +308,7 @@
     el.classList.remove('is-error', 'is-success', 'is-info');
   }
 
-
-  function showToast(message, type = 'info', { timeout = 5200 } = {}) {
+  function showToast(message, type = 'info', { timeout = 4500 } = {}) {
     if (!els.toastStack || !message) return;
     const toast = document.createElement('div');
     toast.className = `toast toast-${type}`;
@@ -400,7 +319,7 @@
     icon.textContent = type === 'success' ? '✓' : (type === 'error' ? '!' : 'i');
 
     const text = document.createElement('div');
-    text.className = 'toast-text';
+    text.className = 'toast-msg';
     text.textContent = String(message);
 
     const close = document.createElement('button');
@@ -416,29 +335,17 @@
 
     const dismiss = () => {
       toast.classList.add('is-leaving');
-      setTimeout(() => toast.remove(), 180);
+      setTimeout(() => toast.remove(), 200);
     };
     close.addEventListener('click', dismiss);
     if (timeout > 0) setTimeout(dismiss, timeout);
   }
 
-  function notify(message, type = 'info', options) {
-    showToast(message, type, options);
-  }
-
+  // ---------- Loading state ----------
   function setLoading(btn, loading) {
     if (!btn) return;
-    if (loading) {
-      btn.disabled = true;
-      if (!btn.dataset._origText) btn.dataset._origText = btn.textContent;
-      btn.textContent = 'Working…';
-    } else {
-      btn.disabled = false;
-      if (btn.dataset._origText) {
-        btn.textContent = btn.dataset._origText;
-        delete btn.dataset._origText;
-      }
-    }
+    btn.classList.toggle('is-loading', !!loading);
+    btn.disabled = !!loading;
   }
 
   function setListLoading(kind, loading, label = 'Loading…', isError = false) {
@@ -451,32 +358,22 @@
     if (!target || !target.loading) return;
 
     target.loading.hidden = !loading;
-    target.loading.classList.toggle('is-error', Boolean(isError));
-    target.loading.dataset.label = label;
 
     if (loading) {
       target.loading.innerHTML = isError
-        ? '<div class="loading-error-note">Tap refresh and try again.</div>'
-        : Array.from({ length: kind === 'lb' ? 5 : 4 }, () => (
+        ? `<div style="padding:18px;text-align:center;">${label}</div>`
+        : Array.from({ length: kind === 'lb' ? 5 : 4 }, () =>
           '<div class="skeleton-row"><span class="skeleton-dot"></span><span class="skeleton-line"></span><span class="skeleton-pill"></span></div>'
-        )).join('');
+        ).join('');
       if (!isError && target.empty) target.empty.hidden = true;
-      if (target.rows) {
-        target.rows.setAttribute('aria-busy', 'true');
-        target.rows.classList.toggle('is-refreshing', target.rows.children.length > 0);
-      }
+      if (target.rows) target.rows.setAttribute('aria-busy', 'true');
     } else {
       target.loading.innerHTML = '';
-      if (target.rows) {
-        target.rows.setAttribute('aria-busy', 'false');
-        target.rows.classList.remove('is-refreshing');
-      }
+      if (target.rows) target.rows.setAttribute('aria-busy', 'false');
     }
   }
 
-  // -------------------------------------------------------------------
-  // Formatting
-  // -------------------------------------------------------------------
+  // ---------- Formatting ----------
   function formatMoney(value) {
     const n = Math.max(0, Math.floor(Number(value || 0)));
     return `${n.toLocaleString('en-US')} Gold`;
@@ -501,9 +398,9 @@
     const date = new Date(dateInput);
     if (Number.isNaN(date.getTime())) return '—';
     const days = Math.max(0, Math.floor((Date.now() - date.getTime()) / 86400000));
-    if (days === 0) return 'Created today';
-    if (days === 1) return '1 day old';
-    return `${days.toLocaleString('en-US')} days old`;
+    if (days === 0) return 'Today';
+    if (days === 1) return '1 day';
+    return `${days.toLocaleString('en-US')} days`;
   }
   function formatPercent(value) {
     const n = Number(value);
@@ -516,7 +413,6 @@
     return `${Math.floor(n).toLocaleString('en-US')} Gold`;
   }
 
-
   function passwordStrength(password) {
     let score = 0;
     if (password.length >= getMinPasswordLength()) score += 1;
@@ -526,11 +422,9 @@
     if (/[^a-zA-Z0-9]/.test(password)) score += 1;
     return Math.min(score, 5);
   }
-
   function getMinPasswordLength() {
     return Number((state.runtimeConfig && state.runtimeConfig.minPasswordLength) || CONFIG.MIN_PASSWORD_LENGTH) || 6;
   }
-
   function updatePasswordMeter() {
     if (!els.passwordMeter || !els.passwordMeterFill || !els.passwordMeterText) return;
     const password = els.signupPassword ? els.signupPassword.value || '' : '';
@@ -546,38 +440,6 @@
     els.passwordMeterText.textContent = labels[score];
   }
 
-  function getBalanceTone(balance) {
-    const n = Math.max(0, Math.floor(Number(balance) || 0));
-    if (n >= 10000) return { key: 'b-white', bg: '#f8fafc', fg: '#0f172a', glow: 'rgba(248, 250, 252, 0.34)' };
-    if (n >= 2000)  return { key: 'b-2000',  bg: '#d946ef', fg: '#fff7ff', glow: 'rgba(217, 70, 239, 0.42)' };
-    if (n >= 1500)  return { key: 'b-1500',  bg: '#8b5cf6', fg: '#ffffff', glow: 'rgba(139, 92, 246, 0.45)' };
-    if (n >= 1000)  return { key: 'b-1000',  bg: '#3b82f6', fg: '#eff6ff', glow: 'rgba(59, 130, 246, 0.42)' };
-    if (n >= 500)   return { key: 'b-500',   bg: '#06b6d4', fg: '#ecfeff', glow: 'rgba(6, 182, 212, 0.40)' };
-    if (n >= 400)   return { key: 'b-400',   bg: '#14b8a6', fg: '#ecfdf5', glow: 'rgba(20, 184, 166, 0.38)' };
-    if (n >= 300)   return { key: 'b-300',   bg: '#22c55e', fg: '#052e16', glow: 'rgba(34, 197, 94, 0.38)' };
-    if (n >= 200)   return { key: 'b-200',   bg: '#84cc16', fg: '#1a2e05', glow: 'rgba(132, 204, 22, 0.38)' };
-    if (n >= 100)   return { key: 'b-100',   bg: '#facc15', fg: '#422006', glow: 'rgba(250, 204, 21, 0.40)' };
-    if (n > 0) {
-      const t = Math.min(1, n / 100);
-      return {
-        key: 'b-low',
-        bg: `color-mix(in srgb, #ef4444 ${Math.round(100 - t * 48)}%, #22c55e ${Math.round(t * 52)}%)`,
-        fg: '#fff7ed',
-        glow: 'rgba(245, 158, 11, 0.32)'
-      };
-    }
-    return { key: 'b-zero', bg: '#ef4444', fg: '#fff1f2', glow: 'rgba(239, 68, 68, 0.42)' };
-  }
-
-  function applyBalanceTone(el, balance) {
-    if (!el) return;
-    const tone = getBalanceTone(balance);
-    el.dataset.balanceTone = tone.key;
-    el.style.setProperty('--balance-bg', tone.bg);
-    el.style.setProperty('--balance-fg', tone.fg);
-    el.style.setProperty('--balance-glow', tone.glow);
-  }
-
   function parseWholeDollars(value) {
     const raw = String(value ?? '').replace(/,/g, '').trim();
     if (!/^\d+$/.test(raw)) return null;
@@ -585,7 +447,6 @@
     if (!Number.isSafeInteger(n)) return null;
     return n;
   }
-
   function sanitizeIntegerInput(input, { clampMax = false } = {}) {
     if (!input) return;
     const cleaned = String(input.value || '').replace(/[^0-9]/g, '');
@@ -604,7 +465,6 @@
     const totalPages = Number.isFinite(Number(data.totalPages)) ? Number(data.totalPages) : Math.max(1, Math.ceil(total / limit));
     return { total, totalPages: Math.max(1, totalPages), page: Number(data.page) || page, limit };
   }
-
   function updatePager(prefix, meta) {
     const pager = els[`${prefix}Pager`];
     const prev = els[`${prefix}Prev`];
@@ -619,9 +479,7 @@
     info.textContent = `Page ${page} of ${totalPages}`;
   }
 
-  // -------------------------------------------------------------------
-  // Confirm modal (replaces window.confirm)
-  // -------------------------------------------------------------------
+  // ---------- Confirm modal ----------
   let confirmResolver = null;
   function confirmModal({ title, body, confirmText, cancelText, danger = true } = {}) {
     return new Promise((resolve) => {
@@ -647,17 +505,9 @@
     }
   }
 
-  // -------------------------------------------------------------------
-  // Theme + wager limits
-  // -------------------------------------------------------------------
-  function hasOwnOpenGames() {
-    return Number(state.ownOpenGamesCount) > 0;
-  }
+  // ---------- Helpers (lost-state, theme, wager) ----------
+  function hasOwnOpenGames() { return Number(state.ownOpenGamesCount) > 0; }
 
-  // v1.3: Topbar pill showing how much Gold is currently locked in the
-  // user's open games (escrow). Hidden when nothing is locked. Renders
-  // even when the user has 0 spendable Gold so they understand WHY
-  // they can't create a new game.
   function updateLockedPill() {
     if (!els.lockedPill) return;
     const locked = Math.max(0, Math.floor(Number(state.ownLockedGold) || 0));
@@ -668,7 +518,6 @@
     els.lockedPill.hidden = false;
     if (els.lockedValue) els.lockedValue.textContent = `${formatMoney(locked)} locked`;
     els.lockedPill.title = `${formatMoney(locked)} reserved in your open games. Cancel a game to free it up.`;
-    els.lockedPill.setAttribute('aria-label', els.lockedPill.title);
   }
 
   function isEliminated() {
@@ -684,10 +533,9 @@
     document.body.classList.toggle('is-eliminated', lost);
     if (els.lostCard) els.lostCard.hidden = !lost;
 
-    // v1.3: cancel is allowed even at 0 Gold; only create/join are locked.
     if (els.createFeedback && lost) {
-      showFeedback(els.createFeedback, 'You reached 0 Gold. You can still browse games and the leaderboard. To play again, sign out and create a new account, or cancel an open game if you have one.', 'error');
-    } else if (els.createFeedback && !lost && /You reached 0 Gold|You Lost!/.test(els.createFeedback.textContent || '')) {
+      showFeedback(els.createFeedback, "You're out of Gold. You can still browse games and the leaderboard. Sign out and create a new account to play again.", 'error');
+    } else if (els.createFeedback && !lost && /out of Gold|reached 0 Gold/i.test(els.createFeedback.textContent || '')) {
       clearFeedback(els.createFeedback);
     }
   }
@@ -711,11 +559,7 @@
       }
     });
   }
-
-  function toggleTheme() {
-    applyTheme(state.theme === 'light' ? 'dark' : 'light');
-    playClick();
-  }
+  function toggleTheme() { applyTheme(state.theme === 'light' ? 'dark' : 'light'); }
 
   function getMaxAllowedWager() {
     const cfgMax = Number((state.runtimeConfig && state.runtimeConfig.maxWager) || CONFIG.MAX_WAGER) || Number.MAX_SAFE_INTEGER;
@@ -723,11 +567,9 @@
     const safeBalance = Number.isFinite(balance) ? Math.max(0, balance) : 0;
     return Math.max(0, Math.min(cfgMax, safeBalance));
   }
-
   function getMinWager() {
     return Number((state.runtimeConfig && state.runtimeConfig.minWager) || CONFIG.MIN_WAGER) || 1;
   }
-
   function updateWagerLimitUI() {
     if (!els.wagerInput) return;
     const min = getMinWager();
@@ -740,17 +582,14 @@
       els.wagerHint.hidden = true;
     }
 
-    els.wagerInput.min = String(min);
-    els.wagerInput.max = max >= min ? String(max) : String(min);
-
     if (max >= min) {
-      els.wagerInput.placeholder = `${compactMoney(min)} - ${compactMoney(max)}`;
+      els.wagerInput.placeholder = `${compactMoney(min)} – ${compactMoney(max)}`;
     } else if (lost) {
-      els.wagerInput.placeholder = 'You Lost!';
+      els.wagerInput.placeholder = 'Out of Gold';
     } else if (hasOwnOpenGames()) {
       els.wagerInput.placeholder = 'Gold reserved';
     } else {
-      els.wagerInput.placeholder = 'No gold available';
+      els.wagerInput.placeholder = 'No Gold available';
     }
 
     const createDisabled = lost || unavailable;
@@ -763,17 +602,13 @@
     }
   }
 
-  // -------------------------------------------------------------------
-  // Result notification storage
-  // -------------------------------------------------------------------
+  // ---------- Notification storage ----------
   function idSetFromStorage(key) {
     try {
       const raw = localStorage.getItem(key);
       const list = raw ? JSON.parse(raw) : [];
       return new Set(Array.isArray(list) ? list.map(Number).filter(Number.isFinite) : []);
-    } catch {
-      return new Set();
-    }
+    } catch { return new Set(); }
   }
   function saveIdSet(key, set, limit = 120) {
     try {
@@ -781,17 +616,11 @@
       localStorage.setItem(key, JSON.stringify(list));
     } catch {}
   }
-  function seenCompletedKey() {
-    return state.user ? `${SEEN_COMPLETED_PREFIX}${state.user.id}` : null;
-  }
-  function pendingCreatedKey() {
-    return state.user ? `${PENDING_CREATED_PREFIX}${state.user.id}` : null;
-  }
+  function seenCompletedKey() { return state.user ? `${SEEN_COMPLETED_PREFIX}${state.user.id}` : null; }
+  function pendingCreatedKey() { return state.user ? `${PENDING_CREATED_PREFIX}${state.user.id}` : null; }
   function loadNotificationSets() {
-    const seenKey = seenCompletedKey();
-    const pendingKey = pendingCreatedKey();
-    state.seenCompletedIds = seenKey ? idSetFromStorage(seenKey) : new Set();
-    state.pendingCreatedGameIds = pendingKey ? idSetFromStorage(pendingKey) : new Set();
+    state.seenCompletedIds = seenCompletedKey() ? idSetFromStorage(seenCompletedKey()) : new Set();
+    state.pendingCreatedGameIds = pendingCreatedKey() ? idSetFromStorage(pendingCreatedKey()) : new Set();
   }
   function saveSeenCompletedIds() {
     const key = seenCompletedKey();
@@ -808,9 +637,7 @@
     savePendingCreatedIds();
   }
 
-  // -------------------------------------------------------------------
-  // Session
-  // -------------------------------------------------------------------
+  // ---------- Session ----------
   function setSession(token, user) {
     state.token = token;
     state.user  = user;
@@ -825,6 +652,7 @@
     state.pendingCreatedGameIds = null;
     state.lastBannerGameId = null;
     state.ownOpenGamesCount = null;
+    state.ownLockedGold = 0;
     tokenStorage.removeItem(TOKEN_KEY);
     stopPolling();
     stopPresence();
@@ -848,7 +676,6 @@
     els.balancePill.hidden = false;
     els.balanceValue.textContent = formatMoney(state.user.balance);
     els.balancePill.setAttribute('aria-label', `Gold balance ${formatMoney(state.user.balance)}`);
-    applyBalanceTone(els.balancePill, state.user.balance);
     els.userName.hidden = false;
     els.userName.textContent = state.user.username;
     if (els.onlinePill) els.onlinePill.hidden = false;
@@ -858,9 +685,7 @@
     applyEliminatedState();
   }
 
-  // -------------------------------------------------------------------
-  // View switching
-  // -------------------------------------------------------------------
+  // ---------- View switching ----------
   function showAuthView() {
     document.body.dataset.view = 'auth';
     els.viewAuth.hidden = false;
@@ -875,7 +700,6 @@
     els.topbar.hidden = false;
     if (els.themeToggleAuth) els.themeToggleAuth.hidden = true;
   }
-
   function switchAuthTab(name) {
     state.activeAuthTab = name;
     els.authTabs.forEach(t => {
@@ -889,7 +713,6 @@
     clearFeedback(els.signupFeedback);
     updatePasswordMeter();
   }
-
   function switchMainTab(name) {
     state.activeMainTab = name;
     els.mainTabs.forEach(t => {
@@ -902,15 +725,12 @@
     els.panelLeaderboard.hidden = (name !== 'leaderboard');
 
     if (name === 'my') hideMyGamesBadge();
-
     if (name === 'lobby')       refreshOpenGames().catch(() => {});
     if (name === 'my')          refreshMyGames().catch(() => {});
     if (name === 'leaderboard') refreshLeaderboard().catch(() => {});
   }
 
-  // -------------------------------------------------------------------
-  // Auth handlers
-  // -------------------------------------------------------------------
+  // ---------- Auth handlers ----------
   async function handleSignup(e) {
     e.preventDefault();
     clearFeedback(els.signupFeedback);
@@ -919,11 +739,8 @@
     const password = els.signupPassword.value || '';
     const confirm  = els.signupConfirm.value  || '';
 
-    // Frontend validation mirrors the backend's stricter rules so the
-    // user gets the message instantly, but the server is the source of
-    // truth — never trust this alone.
     if (!/^[a-zA-Z0-9](?:[a-zA-Z0-9_.\-]*[a-zA-Z0-9])?$/.test(username) || username.length < 3 || username.length > 32 || /[._-]{2,}/.test(username)) {
-      showFeedback(els.signupFeedback, "Username must be 3–32 characters using letters, numbers, _, ., or -. It can't start/end with those symbols or include runs of them.", 'error');
+      showFeedback(els.signupFeedback, "Username must be 3–32 characters using letters, numbers, _, ., or -.", 'error');
       return;
     }
     const minPasswordLength = getMinPasswordLength();
@@ -943,10 +760,9 @@
 
     setLoading(els.signupBtn, true);
     try {
-      const body = { username, password };
       const data = await api('/api/auth/signup', {
         method: 'POST',
-        body: JSON.stringify(body),
+        body: JSON.stringify({ username, password }),
       });
       setSession(data.token, data.user);
       enterDashboard();
@@ -994,9 +810,7 @@
     hideResultBanner();
   }
 
-  // -------------------------------------------------------------------
-  // Runtime config
-  // -------------------------------------------------------------------
+  // ---------- Runtime config ----------
   async function loadRuntimeConfig() {
     try {
       const data = await api('/api/config', { skipAuth: true });
@@ -1007,13 +821,10 @@
     }
   }
 
-  // -------------------------------------------------------------------
-  // Dashboard entry & polling
-  // -------------------------------------------------------------------
+  // ---------- Dashboard entry & polling ----------
   async function enterDashboard() {
     showDashboardView();
     switchMainTab('lobby');
-
     loadNotificationSets();
 
     await Promise.allSettled([
@@ -1049,8 +860,6 @@
       if (document.hidden || state.isFlipping || !state.user) return;
       state.pollTick += 1;
 
-      // refreshMyGames runs completion detection internally, which is what
-      // drives the result banner and creator-side flip animation.
       refreshMyGames({ silent: true, forNotification: true }).catch(() => {});
 
       if (state.activeMainTab === 'lobby') refreshOpenGames({ silent: true }).catch(() => {});
@@ -1063,7 +872,6 @@
     if (state.pollTimer) clearInterval(state.pollTimer);
     state.pollTimer = null;
   }
-
 
   function startEvents() {
     stopEvents();
@@ -1090,7 +898,6 @@
       }
     });
   }
-
   function stopEvents() {
     if (state.eventSource) {
       try { state.eventSource.close(); } catch {}
@@ -1105,11 +912,10 @@
       const n = Math.max(0, Number(data.online || 0));
       if (els.onlineCount) els.onlineCount.textContent = `${n.toLocaleString('en-US')} online`;
       if (els.onlinePill) els.onlinePill.hidden = false;
-    } catch (err) {
+    } catch {
       if (els.onlinePill) els.onlinePill.hidden = true;
     }
   }
-
   function startPresence() {
     stopPresence();
     heartbeatPresence().catch(() => {});
@@ -1118,7 +924,6 @@
       heartbeatPresence().catch(() => {});
     }, 45000);
   }
-
   function stopPresence() {
     if (state.presenceTimer) clearInterval(state.presenceTimer);
     state.presenceTimer = null;
@@ -1131,9 +936,6 @@
       return 0;
     }
     try {
-      // Pull up to MAX_OPEN_GAMES_PER_USER (5 by default) so we can sum
-      // their wagers and show a "Locked" pill in the topbar. The total
-      // returned by the API is authoritative for the count.
       const data = await api('/api/me/games?status=open&page=1&limit=10');
       const count = Number(data.total);
       state.ownOpenGamesCount = Number.isFinite(count) ? count : ((data.games || []).length);
@@ -1148,9 +950,7 @@
     }
   }
 
-  // -------------------------------------------------------------------
-  // Open games panel
-  // -------------------------------------------------------------------
+  // ---------- Open games ----------
   async function refreshOpenGames(options = {}) {
     const page = state.pages.lobby;
     const limit = state.pageSize.lobby;
@@ -1175,7 +975,7 @@
       setListLoading('games', false);
       renderOpenGames(games);
       updatePager('games', meta);
-    } catch (err) {
+    } catch {
       if (els.gamesLoading) {
         setListLoading('games', true, 'Could not load open games.', true);
       }
@@ -1205,11 +1005,8 @@
       const avatar = $('.avatar', node);
       if (avatar && g.creator_username) {
         avatar.textContent = String(g.creator_username).charAt(0).toUpperCase();
-        avatar.classList.add('avatar-letter');
       }
 
-      // Static coin face for the creator's pick. Do NOT use the animated 3D coin
-      // here; it has depth/rim pseudo-elements that overlap at small sizes.
       const pickCoin = $('.game-pick-coin', node);
       if (pickCoin) {
         const side = (g.creator_choice === 'tails') ? 'tails' : 'heads';
@@ -1234,8 +1031,8 @@
           on(joinBtn, 'click', () => handleCancelGame(g.id, joinBtn));
         } else if (lost) {
           joinBtn.disabled = true;
-          joinBtn.textContent = 'You Lost';
-          joinBtn.title = 'You can view games, but you cannot play after reaching 0 Gold.';
+          joinBtn.textContent = 'Locked';
+          joinBtn.title = 'You can browse, but cannot play after reaching 0 Gold.';
         } else if (insufficient) {
           joinBtn.disabled = true;
           joinBtn.textContent = 'Insufficient';
@@ -1267,9 +1064,7 @@
     refreshOpenGames();
   }
 
-  // -------------------------------------------------------------------
-  // My games panel
-  // -------------------------------------------------------------------
+  // ---------- My games ----------
   async function refreshMyGames(options = {}) {
     try {
       const page = options.forNotification ? 1 : state.pages.my;
@@ -1278,12 +1073,7 @@
       const data = await api(`/api/me/games?page=${page}&limit=${limit}`);
       const games = data.games || [];
       const meta = normalizeMeta(data, games, page, limit);
-      if (options.forOpenCount) {
-        state.ownOpenGamesCount = meta.total;
-        updateWagerLimitUI();
-        applyEliminatedState();
-      }
-      if (!options.forNotification && !options.forOpenCount) {
+      if (!options.forNotification) {
         state.totals.my = meta.total;
         if (page > meta.totalPages && meta.totalPages > 0) {
           state.pages.my = meta.totalPages;
@@ -1293,11 +1083,10 @@
         setListLoading('my', false);
         renderMyGames(games);
         updatePager('my', meta);
-      } else if (state.activeMainTab === 'my' && page === state.pages.my && !options.forOpenCount) {
+      } else if (state.activeMainTab === 'my' && page === state.pages.my) {
         renderMyGames(games);
       }
-      // Always run completion detection unless this call is purely a count probe.
-      if (!options.forOpenCount) processCompletionDetection(games, options);
+      processCompletionDetection(games, options);
     } catch (err) {
       console.warn('[refreshMyGames]', err);
       if (!options.silent && !options.forNotification) setListLoading('my', true, 'Could not load your games.', true);
@@ -1332,18 +1121,15 @@
 
       if (g.status === 'open') {
         status.textContent = 'Waiting';
-        status.classList.add('s-open');
+        status.classList.add('status-open');
         detail.innerHTML = '';
         const txt = document.createElement('span');
-        txt.textContent = `You picked `;
+        txt.textContent = 'You picked ';
         const strong = document.createElement('strong');
         strong.textContent = capitalize(g.creator_choice);
         txt.appendChild(strong);
         detail.appendChild(txt);
         amount.textContent = formatMoney(wager);
-        amount.classList.add('is-pending');
-        // v1.3: cancel must work even at 0 Gold — it's the only way
-        // for an "eliminated" player to free their escrowed Gold.
         if (isCreator && cancelBtn) {
           cancelBtn.hidden = false;
           cancelBtn.disabled = false;
@@ -1353,7 +1139,7 @@
       } else if (g.status === 'completed') {
         const won = (g.winner_id === myId);
         status.textContent = won ? 'Won' : 'Lost';
-        status.classList.add(won ? 's-win' : 's-loss');
+        status.classList.add(won ? 'status-win' : 'status-loss');
 
         detail.innerHTML = '';
         const part1 = document.createElement('span');
@@ -1361,16 +1147,16 @@
         const oppName = document.createElement('strong');
         oppName.textContent = opponent || 'opponent';
         const part2 = document.createElement('span');
-        part2.textContent = ` · landed on ${capitalize(g.result)} · you picked ${capitalize(myPick)}`;
+        part2.textContent = ` · ${capitalize(g.result)} · you picked ${capitalize(myPick)}`;
         detail.appendChild(part1);
         detail.appendChild(oppName);
         detail.appendChild(part2);
 
         amount.textContent = won ? `+${formatMoney(wager * 2)}` : `−${formatMoney(wager)}`;
-        amount.classList.add(won ? 'is-win' : 'is-loss');
+        amount.classList.add(won ? 'amt-gain' : 'amt-loss');
       } else {
         status.textContent = 'Cancelled';
-        status.classList.add('s-cancelled');
+        status.classList.add('status-cancelled');
         detail.textContent = 'No opponent joined.';
         amount.textContent = formatMoney(wager);
       }
@@ -1393,7 +1179,8 @@
     const completed = games.filter(g => g.status === 'completed');
     const completedIds = new Set(completed.map(g => Number(g.id)).filter(Number.isFinite));
 
-    const isBrandNewSeenList = state.seenCompletedIds.size === 0 && !localStorage.getItem(seenCompletedKey());
+    const seenKey = seenCompletedKey();
+    const isBrandNewSeenList = state.seenCompletedIds.size === 0 && (!seenKey || !localStorage.getItem(seenKey));
     const pendingOnInitialLoad = completed.filter(g => state.pendingCreatedGameIds.has(Number(g.id)));
     let newOnes = completed.filter(g => !state.seenCompletedIds.has(Number(g.id)));
     if (options.initial && isBrandNewSeenList) {
@@ -1412,9 +1199,6 @@
       .sort((a, b) => new Date(b.completed_at) - new Date(a.completed_at))[0];
 
     if (fresh) {
-      // If the user is the CREATOR of this freshly completed game,
-      // show them the same flip animation the joiner saw — instead of
-      // just a banner. Symmetric experience for both sides.
       const myId = state.user.id;
       const isCreatorOfFresh = (fresh.creator_id === myId);
       if (isCreatorOfFresh && !state.isFlipping) {
@@ -1438,9 +1222,7 @@
   }
 
   let lastModalGameId = null;
-  function justSawInModal(g) {
-    return lastModalGameId === g.id;
-  }
+  function justSawInModal(g) { return lastModalGameId === g.id; }
 
   function bumpMyGamesBadge(count) {
     const badge = els.myGamesBadge;
@@ -1455,9 +1237,7 @@
     els.myGamesBadge.hidden = true;
   }
 
-  // -------------------------------------------------------------------
-  // Result banner
-  // -------------------------------------------------------------------
+  // ---------- Result banner ----------
   function showResultBanner(g) {
     if (!state.user) return;
     const myId = state.user.id;
@@ -1470,7 +1250,6 @@
     els.resultBanner.classList.remove('is-win', 'is-loss');
     els.resultBanner.classList.add(won ? 'is-win' : 'is-loss');
 
-    // Show the actual landed side with the same isolated static coin used in the picker.
     if (els.resultBannerCoin) {
       const side = (g.result === 'tails') ? 'tails' : 'heads';
       els.resultBannerCoin.classList.toggle('static-coin-heads', side === 'heads');
@@ -1495,8 +1274,11 @@
     els.resultBannerSub.appendChild(c);
 
     els.resultBanner.hidden = false;
-    notify(won ? `You won ${formatMoney(wager * 2)}!` : `You lost ${formatMoney(wager)}.`, won ? 'success' : 'error', { timeout: 7200 });
-    els.resultBanner.setAttribute('role', 'status');
+    showToast(
+      won ? `You won ${formatMoney(wager * 2)}!` : `You lost ${formatMoney(wager)}.`,
+      won ? 'success' : 'error',
+      { timeout: 6000 }
+    );
     if (state.bannerTimer) clearTimeout(state.bannerTimer);
     state.bannerTimer = setTimeout(hideResultBanner, 20000);
     if (navigator.vibrate) {
@@ -1512,9 +1294,7 @@
     els.resultBanner.classList.remove('is-win', 'is-loss');
   }
 
-  // -------------------------------------------------------------------
-  // Leaderboard
-  // -------------------------------------------------------------------
+  // ---------- Leaderboard ----------
   async function refreshLeaderboard(options = {}) {
     try {
       const page = state.pages.leaderboard;
@@ -1532,7 +1312,7 @@
       setListLoading('lb', false);
       renderLeaderboard(users);
       updatePager('lb', meta);
-    } catch (err) {
+    } catch {
       if (els.lbLoading) {
         setListLoading('lb', true, 'Could not load leaderboard.', true);
       }
@@ -1558,25 +1338,22 @@
       lbBalance.textContent = formatMoney(u.balance);
       if (lbRecord) lbRecord.textContent = `${Number(st.wins || 0)}W / ${Number(st.losses || 0)}L`;
       if (lbWinrate) lbWinrate.textContent = `${formatPercent(st.win_rate || 0)} win`;
-      applyBalanceTone(lbBalance, u.balance);
-      if (u.rank === 1) node.classList.add('is-top1');
-      else if (u.rank === 2) node.classList.add('is-top2');
-      else if (u.rank === 3) node.classList.add('is-top3');
+      if (u.rank === 1) node.classList.add('is-rank-1');
+      else if (u.rank === 2) node.classList.add('is-rank-2');
+      else if (u.rank === 3) node.classList.add('is-rank-3');
       if (u.id === myId) node.classList.add('is-me');
       frag.appendChild(node);
     });
     els.lbRows.appendChild(frag);
   }
 
-  // -------------------------------------------------------------------
-  // Create game
-  // -------------------------------------------------------------------
+  // ---------- Create / Cancel / Join ----------
   async function handleCreateGame(e) {
     e.preventDefault();
     clearFeedback(els.createFeedback);
 
     if (isEliminated()) {
-      showFeedback(els.createFeedback, 'You Lost! You cannot create another game.', 'error');
+      showFeedback(els.createFeedback, "You're out of Gold and can't create a game.", 'error');
       return;
     }
     sanitizeIntegerInput(els.wagerInput, { clampMax: true });
@@ -1594,11 +1371,10 @@
       return;
     }
 
-    // Confirm large wagers (>= 50% of balance and >= 100 Gold)
     if (state.user && wager >= 100 && wager >= Math.floor(Number(state.user.balance) * 0.5)) {
       const ok = await confirmModal({
         title: 'Confirm wager',
-        body: `You're wagering ${formatMoney(wager)} — that's a big chunk of your gold balance. Continue?`,
+        body: `You're wagering ${formatMoney(wager)} — that's a big chunk of your balance. Continue?`,
         confirmText: 'Wager it',
         cancelText: 'Back',
         danger: false,
@@ -1625,8 +1401,8 @@
       els.wagerInput.value = '';
       els.formCreateGame.querySelectorAll('input[name="choice"]').forEach(input => { input.checked = false; });
       updateWagerLimitUI();
-      playClick();
       showFeedback(els.createFeedback, 'Game created. Waiting for an opponent…', 'success');
+      showToast('Game created. Waiting for an opponent…', 'success', { timeout: 3500 });
       refreshOpenGames();
       refreshMyGames();
       refreshMe();
@@ -1639,14 +1415,6 @@
     }
   }
 
-  // -------------------------------------------------------------------
-  // Cancel game
-  // ---------------------------------------------------------------------
-  // v1.3: A user with 0 spendable Gold MUST still be able to cancel
-  // their own open games (they're cancelling THEIR escrow, which gives
-  // them Gold back — this is the user's escape hatch from being locked
-  // at 0). The previous version blocked this with `isEliminated()`.
-  // The server has always allowed it; the bug was purely UI.
   async function handleCancelGame(gameId, btn) {
     if (!gameId) return;
     const finishAction = beginClientAction(`cancel-game:${gameId}`, CLIENT_ACTION_COOLDOWNS.cancel, 'Cancelling too fast');
@@ -1668,13 +1436,11 @@
         await refreshOwnOpenGamesCount();
         updateTopbar();
       }
-      showFeedback(els.createFeedback, 'Game cancelled and wager refunded.', 'success');
-      setTimeout(() => clearFeedback(els.createFeedback), 20000);
+      showToast('Game cancelled and wager refunded.', 'success', { timeout: 3500 });
       refreshOpenGames().catch(() => {});
       refreshMyGames().catch(() => {});
     } catch (err) {
-      showFeedback(els.createFeedback, err.message, 'error');
-      setTimeout(() => clearFeedback(els.createFeedback), 20000);
+      showToast(err.message, 'error', { timeout: 4500 });
       refreshMyGames().catch(() => {});
     } finally {
       finishAction();
@@ -1682,12 +1448,9 @@
     }
   }
 
-  // -------------------------------------------------------------------
-  // Join game (with flip animation) — JOINER side
-  // -------------------------------------------------------------------
   async function handleJoinGame(gameId, wager, btn) {
     if (isEliminated()) {
-      showFeedback(els.createFeedback, 'You Lost! You cannot join games.', 'error');
+      showToast("You're out of Gold and can't join games.", 'error');
       return;
     }
     if (state.isFlipping) return;
@@ -1719,7 +1482,7 @@
       revealFlipResult(data);
     } catch (err) {
       closeFlipModal();
-      showFeedback(els.createFeedback, err.message, 'error');
+      showToast(err.message, 'error', { timeout: 4500 });
       refreshOpenGames();
     } finally {
       finishAction();
@@ -1728,10 +1491,6 @@
     }
   }
 
-  // -------------------------------------------------------------------
-  // CREATOR-side flip: when the user's open game has just been joined
-  // and completed, replay the flip animation for them too.
-  // -------------------------------------------------------------------
   async function showCreatorFlip(g, freshUser = null) {
     if (!state.user) return;
     state.isFlipping = true;
@@ -1746,7 +1505,6 @@
       await wait(280);
       await animateFlip(g.result);
 
-      // Build a payload that revealFlipResult expects
       const payload = {
         game: g,
         user: freshUser || state.user,
@@ -1762,16 +1520,13 @@
     }
   }
 
-  function wait(ms) {
-    return new Promise(r => setTimeout(r, ms));
-  }
+  function wait(ms) { return new Promise(r => setTimeout(r, ms)); }
 
   function openFlipModal({ title, sub } = {}) {
     els.flipResult.hidden = true;
     if (title && els.flipTitle) els.flipTitle.textContent = title;
     if (els.flipSub) els.flipSub.textContent = sub || 'Server is choosing the result…';
     const inner = els.flipCoinInner;
-    inner.style.removeProperty('--final-y');
     inner.style.removeProperty('--final-x');
     inner.style.removeProperty('--toss-duration');
     inner.style.transform = '';
@@ -1787,19 +1542,16 @@
       const inner = els.flipCoinInner;
       const coin  = els.flipCoin;
 
-      // X-axis rotation for the v0.13 physical vertical flip.
-      // Heads = even number of half-turns (lands face up).
-      // Tails = odd number of half-turns.
+      // Vertical X-axis flip.
+      // Heads = even half-turns -> heads face up.
+      // Tails = odd half-turns  -> tails (rotated 180°) shows up.
       const finalX = (result === 'heads') ? '2160deg' : '2340deg';
-      // Readable physical flip: not instant, not sluggish, and final face always matches server result.
-      const configuredDuration = Number(CONFIG.DEFAULT_FLIP_DURATION_MS) || 2200;
-      const dur = Math.min(Math.max(configuredDuration, 1900), 2600);
+      const configuredDuration = Number(CONFIG.DEFAULT_FLIP_DURATION_MS) || 1500;
+      const dur = Math.min(Math.max(configuredDuration, 1200), 2400);
 
       inner.style.setProperty('--final-x', finalX);
-      // Keep the legacy variable updated too so older fallback CSS never lands wrong.
-      inner.style.setProperty('--final-y', (result === 'heads') ? '2880deg' : '3060deg');
-      inner.style.setProperty('--toss-duration', `${dur}ms`);
       coin.style.setProperty('--toss-duration', `${dur}ms`);
+      inner.style.setProperty('--toss-duration', `${dur}ms`);
 
       coin.classList.remove('is-waiting');
       void coin.offsetWidth;
@@ -1811,6 +1563,8 @@
     });
   }
 
+  // FIX: previously the "Gold change" / "Outcome" rows showed "You Lost!"
+  // when the user lost their last gold. Always show the actual amount.
   function revealFlipResult(data) {
     if (!state.user) return;
     const game = data.game;
@@ -1821,13 +1575,12 @@
     const wager     = Number(game.wager);
 
     const newBalance = data.user ? data.user.balance : data.balance;
-    const hitZero = !won && Number(newBalance) <= 0;
 
-    els.flipSub.textContent = won ? 'You won!' : (hitZero ? 'You Lost!' : 'You lost.');
+    els.flipSub.textContent = won ? 'You won!' : 'You lost.';
     els.resultSide.textContent    = capitalize(game.result);
     els.resultPick.textContent    = capitalize(myPick);
-    els.resultOutcome.textContent = won ? 'You won' : (hitZero ? 'You Lost!' : 'You lost');
-    els.resultAmount.textContent  = won ? `+${formatMoney(wager * 2)}` : (hitZero ? 'You Lost!' : `−${formatMoney(wager)}`);
+    els.resultOutcome.textContent = won ? 'You won' : 'You lost';
+    els.resultAmount.textContent  = won ? `+${formatMoney(wager * 2)}` : `−${formatMoney(wager)}`;
     els.resultBalance.textContent = formatMoney(newBalance);
 
     const allRows = els.flipResult.querySelectorAll('.result-row');
@@ -1870,9 +1623,9 @@
     els.flipModal.setAttribute('aria-hidden', 'true');
     els.flipCoin.classList.remove('is-tossing', 'is-waiting');
     els.flipResult.hidden = true;
-    stopFlipTicks();
   }
 
+  // ---------- Profile ----------
   function renderProfileStats(payload) {
     const user = payload?.user || state.user || {};
     const stats = payload?.stats || {};
@@ -1882,7 +1635,7 @@
     if (els.profileStreak) els.profileStreak.textContent = `${Number(stats.current_win_streak || 0)} wins`;
     if (els.profileMaxStreak) els.profileMaxStreak.textContent = `${Number(stats.max_win_streak || 0)} wins`;
     if (els.profileRecord) els.profileRecord.textContent = `${Number(stats.wins || 0)}W / ${Number(stats.losses || 0)}L`;
-    if (els.profileRatio) els.profileRatio.textContent = `${formatPercent(stats.win_rate || 0)} win rate`;
+    if (els.profileRatio) els.profileRatio.textContent = `${formatPercent(stats.win_rate || 0)}`;
     if (els.profileNote) els.profileNote.textContent = `${Number(stats.games_played || 0).toLocaleString('en-US')} completed games counted.`;
   }
 
@@ -1910,30 +1663,19 @@
     els.profileModal.setAttribute('aria-hidden', 'true');
   }
 
-  // -------------------------------------------------------------------
-  // Event wiring
-  // -------------------------------------------------------------------
+  // ---------- Wire events & boot ----------
   function wireEvents() {
-    // Auth tabs
-    els.authTabs.forEach(t => {
-      on(t, 'click', () => switchAuthTab(t.dataset.authTab));
-    });
-    // Main tabs
-    els.mainTabs.forEach(t => {
-      on(t, 'click', () => switchMainTab(t.dataset.mainTab));
-    });
+    els.authTabs.forEach(t => on(t, 'click', () => switchAuthTab(t.dataset.authTab)));
+    els.mainTabs.forEach(t => on(t, 'click', () => switchMainTab(t.dataset.mainTab)));
 
-    // Auth forms
     on(els.formLogin, 'submit', handleLogin);
     on(els.formSignup, 'submit', handleSignup);
     on(els.signupPassword, 'input', updatePasswordMeter);
     on(els.logoutBtn, 'click', handleLogout);
     on(els.userName, 'click', openProfileModal);
-    on(els.lostSignout, 'click', handleLogout);
     on(els.themeToggle, 'click', toggleTheme);
     on(els.themeToggleAuth, 'click', toggleTheme);
 
-    // Create
     on(els.formCreateGame, 'submit', handleCreateGame);
     on(els.wagerInput, 'beforeinput', (e) => {
       if (e.data && /[^0-9]/.test(e.data)) e.preventDefault();
@@ -1942,45 +1684,34 @@
     on(els.filterMin, 'input', () => sanitizeIntegerInput(els.filterMin));
     on(els.filterMax, 'input', () => sanitizeIntegerInput(els.filterMax));
 
-    // Open games
     on(els.applyFilters, 'click', applyFilters);
     on(els.clearFilters, 'click', clearFilters);
     on(els.refreshGames, 'click', () => runThrottled('games', CLIENT_ACTION_COOLDOWNS.refresh, () => refreshOpenGames()));
     on(els.gamesPrev, 'click', () => runThrottled('games-prev', CLIENT_ACTION_COOLDOWNS.refresh, () => { if (state.pages.lobby > 1) { state.pages.lobby -= 1; refreshOpenGames(); } }));
     on(els.gamesNext, 'click', () => runThrottled('games-next', CLIENT_ACTION_COOLDOWNS.refresh, () => { state.pages.lobby += 1; refreshOpenGames(); }));
 
-    // My games
     on(els.refreshMy, 'click', () => runThrottled('my', CLIENT_ACTION_COOLDOWNS.refresh, () => refreshMyGames()));
     on(els.myPrev, 'click', () => runThrottled('my-prev', CLIENT_ACTION_COOLDOWNS.refresh, () => { if (state.pages.my > 1) { state.pages.my -= 1; refreshMyGames(); } }));
     on(els.myNext, 'click', () => runThrottled('my-next', CLIENT_ACTION_COOLDOWNS.refresh, () => { state.pages.my += 1; refreshMyGames(); }));
 
-    // Leaderboard
     on(els.refreshLb, 'click', () => runThrottled('leaderboard', CLIENT_ACTION_COOLDOWNS.refresh, () => refreshLeaderboard()));
     on(els.lbPrev, 'click', () => runThrottled('lb-prev', CLIENT_ACTION_COOLDOWNS.refresh, () => { if (state.pages.leaderboard > 1) { state.pages.leaderboard -= 1; refreshLeaderboard(); } }));
     on(els.lbNext, 'click', () => runThrottled('lb-next', CLIENT_ACTION_COOLDOWNS.refresh, () => { state.pages.leaderboard += 1; refreshLeaderboard(); }));
 
-    // Result banner
     on(els.resultBannerClose, 'click', hideResultBanner);
 
-    // Flip modal close
     on(els.flipCloseBtn, 'click', closeFlipModal);
 
-    // Confirm modal
     on(els.confirmYes, 'click', () => closeConfirmModal(true));
     on(els.confirmNo,  'click', () => closeConfirmModal(false));
     on(els.profileClose, 'click', closeProfileModal);
-    on(els.profileModal, 'click', (e) => {
-      if (e.target === els.profileModal) closeProfileModal();
-    });
-    on(els.confirmModal, 'click', (e) => {
-      if (e.target === els.confirmModal) closeConfirmModal(false);
-    });
+    on(els.profileModal, 'click', (e) => { if (e.target === els.profileModal) closeProfileModal(); });
+    on(els.confirmModal, 'click', (e) => { if (e.target === els.confirmModal) closeConfirmModal(false); });
     on(document, 'keydown', (e) => {
       if (e.key === 'Escape' && els.profileModal && !els.profileModal.hidden) closeProfileModal();
       if (e.key === 'Escape' && !els.confirmModal.hidden) closeConfirmModal(false);
     });
 
-    // [data-action] navigation
     on(document.body, 'click', (e) => {
       const t = e.target.closest('[data-action]');
       if (!t) return;
@@ -1991,9 +1722,6 @@
       }
     });
 
-    // Refresh data when the tab becomes visible again. Browsers pause
-    // timers in hidden tabs, so we want to catch up on completions, balance,
-    // and the visible list as soon as the user returns.
     on(document, 'visibilitychange', () => {
       if (document.hidden) return;
       if (!state.user || state.isFlipping) return;
@@ -2006,20 +1734,12 @@
     });
   }
 
-  // -------------------------------------------------------------------
-  // Boot
-  // -------------------------------------------------------------------
   async function boot() {
     captureElements();
     applyTheme(state.theme);
-    if (!assertRequiredElements()) {
-      document.body.dataset.config = 'error';
-      return;
-    }
     wireEvents();
     document.body.dataset.config = 'ready';
 
-    // Pull authoritative limits from /api/config (non-blocking).
     loadRuntimeConfig().catch(() => {});
 
     if (!state.token) {

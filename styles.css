@@ -1,21 +1,15 @@
 /* =====================================================================
-   Coinflip LB — styles.css
+   Coinflip LB — styles.css (rewritten)
    ---------------------------------------------------------------------
-   Sober, modern, dark UI with a violet/gold accent. Mobile-first.
-   The coin uses CSS 3D transforms with a multi-stage toss animation.
+   Single source of truth. No version-layered overrides, no !important
+   battle. Mobile-first. Dark and light themes.
    ===================================================================== */
 
-/* --- Hidden attribute reset ----------------------------------------------
-   The HTML `hidden` attribute is implemented by browsers as
-   `[hidden] { display: none }` in the user-agent stylesheet, which any
-   author-written `display:` rule (e.g. on .modal-backdrop) silently
-   overrides. This makes `hidden` always win.
-   ---------------------------------------------------------------------- */
+/* The HTML `hidden` attribute must always win against author display rules. */
 [hidden] { display: none !important; }
 
-/* --- Tokens ---------------------------------------------------------- */
+/* --- Design tokens -------------------------------------------------- */
 :root {
-  /* Surfaces */
   --bg:           #07080f;
   --bg-elev:      #11131e;
   --bg-elev-2:    #181b29;
@@ -23,21 +17,16 @@
   --line:         #262a3d;
   --line-2:       #323750;
 
-  /* Text */
   --text:         #ecedf5;
   --text-dim:     #9ba1ba;
   --text-mute:    #6b7088;
 
-  /* Accents */
-  --primary:      #8b5cf6;        /* violet */
+  --primary:      #8b5cf6;
   --primary-hi:   #a78bfa;
   --primary-deep: #6d28d9;
-  --primary-ink:  #0a0d18;
 
-  --accent:       #06b6d4;        /* cyan, used sparingly */
   --gold:         #fbbf24;
   --gold-deep:    #d97706;
-  --gold-shadow:  #5a3a00;
 
   --good:         #22c55e;
   --good-bg:      rgba(34, 197, 94, 0.10);
@@ -45,20 +34,17 @@
   --bad-bg:       rgba(239, 68, 68, 0.10);
   --warn:         #f59e0b;
 
-  /* Geometry */
   --radius-sm: 8px;
   --radius-md: 12px;
   --radius-lg: 18px;
   --radius-xl: 24px;
 
-  /* Shadows */
   --shadow-sm: 0 2px 6px rgba(0,0,0,0.30);
   --shadow:    0 18px 40px -12px rgba(0,0,0,0.55), 0 4px 12px rgba(0,0,0,0.35);
   --shadow-lg: 0 30px 60px -20px rgba(0,0,0,0.65), 0 8px 24px rgba(0,0,0,0.4);
-  --glow-primary: 0 0 0 1px rgba(139, 92, 246, 0.35), 0 12px 36px -10px rgba(139, 92, 246, 0.45);
 
-  --font:       system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  --font-mono:  ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --font: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
 body[data-theme="light"] {
@@ -76,7 +62,6 @@ body[data-theme="light"] {
   --primary:      #7c3aed;
   --primary-hi:   #6d28d9;
   --primary-deep: #5b21b6;
-  --primary-ink:  #ffffff;
 
   --good-bg:      rgba(22, 163, 74, 0.10);
   --bad-bg:       rgba(220, 38, 38, 0.10);
@@ -119,21 +104,21 @@ p  { margin: 0; }
   position: absolute;
   border-radius: 50%;
   filter: blur(80px);
-  opacity: 0.55;
   will-change: transform;
 }
 .orb-a {
   width: 520px; height: 520px;
   background: radial-gradient(circle, #8b5cf6 0%, transparent 70%);
   top: -180px; left: -120px;
+  opacity: 0.45;
   animation: orb-drift-a 22s ease-in-out infinite;
 }
 .orb-b {
   width: 460px; height: 460px;
   background: radial-gradient(circle, #06b6d4 0%, transparent 70%);
   bottom: -160px; right: -120px;
+  opacity: 0.35;
   animation: orb-drift-b 26s ease-in-out infinite;
-  opacity: 0.40;
 }
 .orb-c {
   width: 360px; height: 360px;
@@ -199,39 +184,35 @@ body[data-theme="light"] .orb-c { opacity: 0.18; }
   box-shadow: var(--shadow);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
+  font-size: 13.5px;
   pointer-events: auto;
-  animation: toast-enter 220ms cubic-bezier(.2,.8,.2,1) both;
+  animation: toast-in 240ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
-.toast.is-leaving { animation: toast-leave 180ms ease both; }
-.toast-icon {
-  display: inline-grid; place-items: center;
-  width: 28px; height: 28px; border-radius: 999px;
-  font-weight: 900;
-  background: color-mix(in srgb, var(--primary) 18%, transparent);
-  color: var(--primary-hi);
-}
-.toast-success .toast-icon { background: var(--good-bg); color: var(--good); }
-.toast-error .toast-icon { background: var(--bad-bg); color: var(--bad); }
-.toast-text { font-size: 14px; line-height: 1.35; padding-top: 3px; }
+.toast.is-leaving { animation: toast-out 200ms ease-in forwards; }
+.toast-icon { display: inline-flex; align-items: center; justify-content: center; font-size: 16px; }
+.toast-msg { line-height: 1.4; word-break: break-word; }
 .toast-close {
-  border: 0; background: transparent; color: var(--text-mute);
-  width: 28px; height: 28px; border-radius: 999px;
-  display: inline-grid; place-items: center;
-  font-weight: 800; line-height: 1;
+  background: transparent;
+  border: 0;
+  color: var(--text-mute);
+  font-size: 16px;
+  line-height: 1;
+  width: 28px; height: 28px;
+  border-radius: 8px;
 }
-.toast-close:hover { background: var(--bg-elev-2); color: var(--text); }
-@keyframes toast-enter {
-  from { transform: translate3d(16px,-8px,0) scale(.98); opacity: 0; }
-  to   { transform: translate3d(0,0,0) scale(1); opacity: 1; }
+.toast-close:hover { color: var(--text); background: var(--bg-elev-2); }
+.toast.toast-success { border-color: rgba(34, 197, 94, 0.4); }
+.toast.toast-success .toast-icon { color: var(--good); }
+.toast.toast-error   { border-color: rgba(239, 68, 68, 0.4); }
+.toast.toast-error   .toast-icon { color: var(--bad); }
+.toast.toast-info    .toast-icon { color: var(--primary-hi); }
+@keyframes toast-in {
+  from { opacity: 0; transform: translateX(20px); }
+  to   { opacity: 1; transform: translateX(0); }
 }
-@keyframes toast-leave {
-  to { transform: translate3d(18px,-6px,0) scale(.98); opacity: 0; }
-}
-@media (max-width: 640px) {
-  .toast-stack { top: auto; right: 10px; left: 10px; bottom: calc(env(safe-area-inset-bottom, 0px) + 12px); width: auto; }
-}
-@media (prefers-reduced-motion: reduce) {
-  .toast, .toast.is-leaving { animation: none !important; }
+@keyframes toast-out {
+  from { opacity: 1; transform: translateX(0); }
+  to   { opacity: 0; transform: translateX(30px); }
 }
 
 /* --- Topbar --------------------------------------------------------- */
@@ -249,73 +230,121 @@ body[data-theme="light"] .orb-c { opacity: 0.18; }
   display: inline-flex; align-items: center; gap: 10px;
   font-weight: 700; letter-spacing: -0.01em;
   color: var(--text);
+  min-width: 0;
 }
 .brand-mark {
   width: 26px; height: 26px;
   filter: drop-shadow(0 2px 6px rgba(251, 191, 36, 0.35));
+  flex: 0 0 auto;
 }
 .brand-text {
   font-size: 16px;
+  white-space: nowrap;
 }
 .topbar-right {
-  display: inline-flex; align-items: center; gap: 10px;
-}
-.balance-pill {
   display: inline-flex; align-items: center; gap: 8px;
-  padding: 6px 12px 6px 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.balance-pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 12px;
   background: linear-gradient(140deg, #fbbf24 0%, #d97706 100%);
   color: #261901;
   border-radius: 999px;
   font-weight: 700;
-  font-size: 14px;
-  box-shadow: 0 6px 18px -8px rgba(251, 191, 36, 0.6), inset 0 1px 0 rgba(255,255,255,0.4);
+  font-size: 13.5px;
+  font-variant-numeric: tabular-nums;
+  box-shadow: 0 6px 18px -8px rgba(251, 191, 36, 0.55), inset 0 1px 0 rgba(255,255,255,0.4);
   white-space: nowrap;
 }
-.balance-pill .balance-label {
-  font-weight: 500;
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  opacity: 0.75;
-}
-.user-name {
-  color: var(--text-dim);
-  font-size: 14px;
+.balance-pill::before {
+  content: "";
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: #261901;
+  box-shadow: inset 0 1px 1px rgba(255,255,255,0.4);
 }
 
-.theme-toggle {
-  position: fixed;
-  right: 14px;
-  bottom: 14px;
-  z-index: 90;
-  width: 42px;
-  height: 42px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+.locked-pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 10px;
   border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-dim);
+  background: color-mix(in srgb, var(--bg-elev-2) 80%, transparent);
+  border: 1px solid var(--line);
+  white-space: nowrap;
+}
+.locked-pill .locked-icon { font-size: 11px; opacity: 0.85; }
+
+.user-name {
+  display: inline-flex; align-items: center;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: transparent;
   border: 1px solid var(--line-2);
+  color: var(--text-dim);
+  font-size: 13.5px;
+  font-weight: 600;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: color 150ms, border-color 150ms, background 150ms;
+}
+.user-name:hover { color: var(--text); border-color: var(--primary); background: color-mix(in srgb, var(--primary) 10%, transparent); }
+
+.online-pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--good) 15%, transparent);
+  border: 1px solid color-mix(in srgb, var(--good) 35%, transparent);
+  color: var(--good);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.online-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--good);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--good) 25%, transparent);
+  animation: online-pulse 2s ease-in-out infinite;
+}
+@keyframes online-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.55; }
+}
+
+.icon-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 36px; height: 36px;
+  border-radius: 999px;
+  background: var(--bg-elev-2);
+  border: 1px solid var(--line);
+  color: var(--text-dim);
+  transition: color 150ms, background 150ms, border-color 150ms, transform 100ms;
+  flex: 0 0 auto;
+}
+.icon-btn:hover { color: var(--text); border-color: var(--primary); background: var(--bg-elev-3); }
+.icon-btn:active { transform: scale(0.94); }
+
+.floating-toggle {
+  position: fixed;
+  right: 20px;
+  top: 20px;
+  z-index: 90;
+  width: 42px; height: 42px;
   background: color-mix(in srgb, var(--bg-elev) 86%, transparent);
-  color: var(--text);
-  box-shadow: var(--shadow-sm);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  transition: transform 120ms ease, background 150ms ease, border-color 150ms ease;
+  box-shadow: var(--shadow-sm);
 }
-.theme-toggle:hover { transform: translateY(-1px); border-color: var(--primary); }
-
-.app-footer {
-  position: fixed;
-  left: 12px;
-  bottom: 10px;
-  z-index: 20;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  color: var(--text-mute);
-  opacity: 0.72;
-  pointer-events: none;
-}
+body[data-view="dashboard"] .floating-toggle { display: none; }
 
 /* --- Layout containers ---------------------------------------------- */
 main {
@@ -327,9 +356,6 @@ main {
 body[data-view="auth"] main {
   max-width: none;
   padding: 0;
-}
-body[data-view="dashboard"] main {
-  max-width: 1100px;
 }
 
 /* --- Buttons -------------------------------------------------------- */
@@ -343,13 +369,14 @@ body[data-view="dashboard"] main {
   font-size: 14px;
   background: var(--bg-elev-2);
   color: var(--text);
-  transition: transform 100ms ease, background 150ms ease, box-shadow 150ms ease, border-color 150ms ease;
+  transition: transform 100ms ease, background 150ms ease, box-shadow 150ms ease, border-color 150ms ease, color 150ms ease;
   user-select: none;
   white-space: nowrap;
 }
-.btn:disabled {
+.btn:disabled, .btn[aria-disabled="true"] {
   opacity: 0.55;
   cursor: not-allowed;
+  pointer-events: none;
 }
 .btn:not(:disabled):hover { transform: translateY(-1px); }
 .btn:not(:disabled):active { transform: translateY(0); }
@@ -370,11 +397,36 @@ body[data-view="dashboard"] main {
 .btn-ghost:not(:disabled):hover {
   background: var(--bg-elev);
   color: var(--text);
-  border-color: var(--line-2);
+}
+.btn-danger {
+  background: linear-gradient(135deg, #ef4444 0%, #b91c1c 100%);
+  color: #fff;
+  box-shadow: 0 10px 24px -8px rgba(239, 68, 68, 0.5);
+}
+.btn-danger:not(:disabled):hover {
+  background: linear-gradient(135deg, #f87171 0%, #dc2626 100%);
 }
 .btn-block { width: 100%; }
 .btn-sm    { padding: 6px 12px; font-size: 13px; border-radius: var(--radius-sm); }
 .btn-lg    { padding: 13px 18px; font-size: 15px; }
+.btn.is-loading {
+  position: relative;
+  color: transparent !important;
+}
+.btn.is-loading::after {
+  content: "";
+  position: absolute;
+  width: 16px; height: 16px;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  top: 50%; left: 50%;
+  margin-top: -8px; margin-left: -8px;
+  color: #fff;
+}
+.btn-ghost.is-loading::after { color: var(--text-dim); }
+@keyframes spin { to { transform: rotate(360deg); } }
 
 /* --- Forms ---------------------------------------------------------- */
 .field {
@@ -383,99 +435,83 @@ body[data-view="dashboard"] main {
 }
 .field-label {
   display: block;
-  font-size: 12px;
+  font-size: 11px;
   text-transform: uppercase;
-  letter-spacing: 0.07em;
+  letter-spacing: 0.06em;
   color: var(--text-mute);
   font-weight: 600;
   margin-bottom: 6px;
 }
-input[type="text"],
-input[type="password"],
-input[type="number"],
-input::placeholder { color: var(--text-mute); }
-input:focus {
-  border-color: var(--primary);
+.field input,
+.field select,
+.field textarea {
+  width: 100%;
+  padding: 11px 14px;
   background: var(--bg-elev-2);
-  box-shadow: 0 0 0 4px rgba(139, 92, 246, 0.15);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  color: var(--text);
+  transition: border-color 150ms, background 150ms, box-shadow 150ms;
 }
-input[type="number"]::-webkit-outer-spin-button,
-input[type="number"]::-webkit-inner-spin-button {
-  -webkit-appearance: none; margin: 0;
+.field input::placeholder { color: var(--text-mute); }
+.field input:focus,
+.field select:focus,
+.field textarea:focus {
+  outline: none;
+  border-color: var(--primary);
+  background: var(--bg-elev);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 25%, transparent);
 }
-input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
-
-.prefix-input {
-  position: relative;
-}
-.prefix-input .prefix {
-  position: absolute;
-  left: 14px; top: 50%; transform: translateY(-50%);
-  color: var(--text-mute);
-  font-weight: 600;
-  pointer-events: none;
-}
-.prefix-input input { padding-left: 28px; }
-.prefix-input-sm input { padding: 8px 10px 8px 22px; font-size: 13px; }
-.prefix-input-sm .prefix { left: 10px; font-size: 13px; }
-
-/* --- Inline feedback (replaces toasts) ------------------------------ */
 .field-hint {
   display: block;
   margin-top: 6px;
-  color: var(--text-mute);
   font-size: 12px;
+  color: var(--text-mute);
 }
+
+.prefix-input {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+}
+.prefix-input .prefix {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 12px;
+  background: var(--bg-elev-3);
+  border: 1px solid var(--line);
+  border-right: 0;
+  border-top-left-radius: var(--radius-md);
+  border-bottom-left-radius: var(--radius-md);
+  font-weight: 800;
+  font-size: 13px;
+  color: var(--gold-deep);
+  font-family: var(--font-mono);
+}
+.prefix-input input {
+  flex: 1 1 auto;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+  width: 100%;
+}
+.prefix-input-sm .prefix { padding: 0 9px; font-size: 12px; }
+.prefix-input-sm input   { padding: 8px 12px; font-size: 13px; }
 
 .form-feedback {
-  margin-top: 12px;
+  margin-top: 10px;
   padding: 10px 12px;
   border-radius: var(--radius-md);
-  font-size: 14px;
+  font-size: 13px;
   border: 1px solid var(--line);
-  background: var(--bg-elev);
-  color: var(--text-dim);
-  animation: fade-in 180ms ease-out;
 }
-.form-feedback.is-error {
-  border-color: rgba(239, 68, 68, 0.3);
-  background: var(--bad-bg);
-  color: #fca5a5;
-}
-.form-feedback.is-success {
-  border-color: rgba(34, 197, 94, 0.3);
-  background: var(--good-bg);
-  color: #86efac;
-}
-.form-feedback.is-info {
-  border-color: rgba(139, 92, 246, 0.3);
-  background: rgba(139, 92, 246, 0.08);
-  color: #c4b5fd;
-}
-@keyframes fade-in {
-  from { opacity: 0; transform: translateY(-4px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
+.form-feedback.is-error   { background: var(--bad-bg);  border-color: rgba(239, 68, 68, 0.35); color: #fca5a5; }
+.form-feedback.is-success { background: var(--good-bg); border-color: rgba(34, 197, 94, 0.35); color: #86efac; }
+.form-feedback.is-info    { background: color-mix(in srgb, var(--primary) 14%, transparent); border-color: color-mix(in srgb, var(--primary) 36%, transparent); color: var(--primary-hi); }
+body[data-theme="light"] .form-feedback.is-error { color: #b91c1c; }
+body[data-theme="light"] .form-feedback.is-success { color: #15803d; }
+body[data-theme="light"] .form-feedback.is-info { color: var(--primary-deep); }
 
-/* --- Cards ---------------------------------------------------------- */
-.card {
-  background: var(--bg-elev);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-lg);
-  padding: 22px;
-  box-shadow: var(--shadow);
-}
-.card + .card,
-.card + .tabs,
-.tabs + .tab-panel,
-.tab-panel + .tab-panel {
-  margin-top: 18px;
-}
-.card-header { margin-bottom: 16px; }
-.card-title  { font-size: 18px; font-weight: 700; margin-bottom: 4px; }
-.card-subtitle { color: var(--text-dim); font-size: 14px; }
-
-/* --- AUTH VIEW ------------------------------------------------------ */
+/* --- Auth view ------------------------------------------------------ */
 .view-auth {
   min-height: 100vh;
   min-height: 100dvh;
@@ -484,13 +520,13 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 }
 .auth-card {
   width: 100%;
-  max-width: 520px;
+  max-width: 440px;
   background: color-mix(in srgb, var(--bg-elev) 82%, transparent);
   backdrop-filter: blur(18px) saturate(140%);
   -webkit-backdrop-filter: blur(18px) saturate(140%);
   border: 1px solid var(--line-2);
   border-radius: var(--radius-xl);
-  padding: clamp(22px, 4vh, 32px) 28px 24px;
+  padding: clamp(24px, 4vh, 36px) 28px 28px;
   box-shadow: var(--shadow-lg), inset 0 1px 0 rgba(255,255,255,0.05);
   text-align: center;
   animation: card-rise 500ms cubic-bezier(0.2, 0.8, 0.2, 1);
@@ -501,28 +537,28 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 }
 .auth-coin-deco {
   display: flex; justify-content: center;
-  margin-bottom: clamp(10px, 2vh, 18px);
+  margin-bottom: 14px;
 }
 .auth-title {
   font-size: 28px;
   font-weight: 800;
   letter-spacing: -0.02em;
-  background: linear-gradient(135deg, #fff 0%, #c4b5fd 60%, #fbbf24 100%);
+  background: linear-gradient(135deg, var(--text) 0%, var(--primary-hi) 60%, var(--gold) 100%);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
 }
 .auth-subtitle {
   color: var(--text-dim);
   font-size: 14px;
-  margin: 0 auto clamp(14px, 2.6vh, 22px);
+  margin: 0 auto 22px;
   max-width: 340px;
   line-height: 1.55;
 }
-.auth-form { text-align: left; margin-top: clamp(12px, 2.2vh, 18px); }
+.auth-form { text-align: left; margin-top: 18px; }
 .auth-fineprint {
-  margin-top: clamp(12px, 2.2vh, 20px);
+  margin-top: 16px;
   font-size: 12px;
   color: var(--text-mute);
 }
@@ -559,7 +595,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   color: var(--text);
   box-shadow: inset 0 0 0 1px var(--line-2);
 }
-.auth-tabs { margin: 4px auto 0; max-width: 320px; }
+.auth-tabs { margin: 0 auto; max-width: 320px; }
 .tab-badge {
   display: inline-flex; align-items: center; justify-content: center;
   min-width: 18px; height: 18px;
@@ -569,9 +605,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   font-size: 11px; font-weight: 700;
   border-radius: 999px;
 }
-
 .tab-panel { display: block; }
-.tab-panel[hidden] { display: none !important; }
 
 /* --- Result banner -------------------------------------------------- */
 .result-banner {
@@ -601,22 +635,59 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   background: linear-gradient(135deg, rgba(34, 197, 94, 0.20) 0%, rgba(251, 191, 36, 0.12) 100%);
   border-color: rgba(34, 197, 94, 0.35);
 }
-.result-banner-coin {
-  flex: 0 0 auto;
-  width: 44px; height: 44px;
-  border-radius: 50%;
-  background: radial-gradient(circle at 30% 30%, #ffe28a, #f5b301 60%, #9c7100);
-  box-shadow: inset 0 -3px 6px rgba(0,0,0,0.3), 0 4px 12px rgba(245, 179, 1, 0.3);
-}
-.result-banner-text { flex: 1; }
+.result-banner-text { flex: 1; min-width: 0; }
 .result-banner-title { font-weight: 700; font-size: 15px; margin-bottom: 2px; }
 .result-banner-sub { color: var(--text-dim); font-size: 13px; }
 
-/* --- Create form (inside dashboard) --------------------------------- */
-.create-card .create-form { display: block; }
+/* --- Card ----------------------------------------------------------- */
+.card {
+  background: color-mix(in srgb, var(--bg-elev) 82%, transparent);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: 22px;
+  margin-bottom: 22px;
+  box-shadow: var(--shadow-sm);
+}
+.card-header { margin-bottom: 16px; }
+.card-title {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  margin-bottom: 4px;
+}
+.card-subtitle {
+  color: var(--text-dim);
+  font-size: 13.5px;
+}
+
+/* Lost state */
+.lost-card {
+  display: flex; align-items: center; gap: 16px;
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.10), color-mix(in srgb, var(--bg-elev) 80%, transparent));
+  border-color: rgba(239, 68, 68, 0.3);
+  margin-bottom: 18px;
+}
+.lost-coin {
+  flex: 0 0 auto;
+  width: 56px; height: 56px;
+  display: grid; place-items: center;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #ef4444, #b91c1c);
+  color: #fff;
+  font-weight: 900;
+  font-size: 14px;
+  box-shadow: inset 0 -3px 6px rgba(0,0,0,0.25);
+}
+.lost-copy { flex: 1; min-width: 0; }
+.lost-copy h2 { font-size: 16px; font-weight: 700; margin-bottom: 4px; }
+.lost-copy p { font-size: 13px; color: var(--text-dim); line-height: 1.5; }
+
+/* --- Create form ---------------------------------------------------- */
 .choice-row {
   display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
-  margin-bottom: 14px;
+  margin-bottom: 16px;
 }
 .choice-card {
   position: relative;
@@ -631,8 +702,8 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .choice-card:hover { border-color: var(--line-2); }
 .choice-card:has(input:checked) {
   border-color: var(--primary);
-  background: rgba(139, 92, 246, 0.08);
-  box-shadow: 0 0 0 1px rgba(139, 92, 246, 0.4);
+  background: color-mix(in srgb, var(--primary) 12%, var(--bg-elev-2));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--primary) 40%, transparent);
 }
 .choice-card input[type="radio"] {
   position: absolute;
@@ -647,7 +718,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   font-size: 15px;
 }
 
-/* --- Panel toolbars ------------------------------------------------- */
+/* --- Panel toolbar -------------------------------------------------- */
 .panel-toolbar {
   display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
   gap: 10px;
@@ -660,7 +731,6 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .filters {
   display: flex; flex-wrap: wrap; align-items: end; gap: 8px;
 }
-.filter { display: block; }
 .filter-label {
   display: block;
   font-size: 11px;
@@ -675,7 +745,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 /* --- Generic rows --------------------------------------------------- */
 .rows {
   display: flex; flex-direction: column;
-  background: var(--bg-elev);
+  background: color-mix(in srgb, var(--bg-elev) 88%, transparent);
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);
   overflow: hidden;
@@ -692,16 +762,53 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .row:hover { background: var(--bg-elev-2); }
 
 .empty-state, .loading-row {
-  padding: 28px 16px;
+  padding: 32px 18px;
   text-align: center;
   color: var(--text-mute);
-  background: var(--bg-elev);
+  background: color-mix(in srgb, var(--bg-elev) 88%, transparent);
   border: 1px dashed var(--line);
   border-radius: var(--radius-lg);
   font-size: 14px;
 }
 
-/* --- Game row (open games tab) ------------------------------------- */
+/* Skeleton loaders */
+.loading-card { padding: 0; }
+.skeleton-row {
+  display: grid;
+  grid-template-columns: 32px 1fr 80px;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--line);
+}
+.skeleton-row:last-child { border-bottom: none; }
+.skeleton-dot {
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  background: linear-gradient(90deg, var(--bg-elev-2), var(--bg-elev-3), var(--bg-elev-2));
+  background-size: 200% 100%;
+  animation: skel 1.4s ease-in-out infinite;
+}
+.skeleton-line {
+  height: 12px;
+  border-radius: 4px;
+  background: linear-gradient(90deg, var(--bg-elev-2), var(--bg-elev-3), var(--bg-elev-2));
+  background-size: 200% 100%;
+  animation: skel 1.4s ease-in-out infinite;
+}
+.skeleton-pill {
+  height: 22px; width: 80px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--bg-elev-2), var(--bg-elev-3), var(--bg-elev-2));
+  background-size: 200% 100%;
+  animation: skel 1.4s ease-in-out infinite;
+}
+@keyframes skel {
+  0%   { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
+}
+
+/* --- Game row (open games tab) -------------------------------------- */
 .game-row {
   grid-template-columns: 1.4fr 1fr 0.8fr auto;
 }
@@ -715,6 +822,10 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   background: linear-gradient(135deg, #8b5cf6 0%, #06b6d4 100%);
   flex: 0 0 auto;
   box-shadow: inset 0 0 0 1px rgba(255,255,255,0.1);
+  display: grid; place-items: center;
+  font-size: 13px;
+  font-weight: 700;
+  color: #fff;
 }
 .game-row-meta { min-width: 0; }
 .game-row-name {
@@ -737,11 +848,12 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   font-family: var(--font-mono);
   font-size: 15px;
   color: var(--gold);
+  text-align: right;
 }
 
 /* --- My-games row --------------------------------------------------- */
 .my-row {
-  grid-template-columns: auto 1.4fr auto auto;
+  grid-template-columns: auto 1.4fr auto auto auto;
 }
 .my-row-status {
   display: inline-flex; align-items: center;
@@ -749,206 +861,114 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   border-radius: 999px;
   font-size: 11px;
   font-weight: 700;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
 }
-.my-row-status.s-open {
-  background: rgba(139, 92, 246, 0.14);
-  color: #c4b5fd;
-}
-.my-row-status.s-win {
-  background: var(--good-bg);
-  color: var(--good);
-}
-.my-row-status.s-loss {
-  background: var(--bad-bg);
-  color: var(--bad);
-}
-.my-row-status.s-cancelled {
-  background: var(--bg-elev-3);
-  color: var(--text-mute);
-}
+.my-row-status.status-open      { background: color-mix(in srgb, var(--primary) 18%, transparent); color: var(--primary-hi); }
+.my-row-status.status-win       { background: var(--good-bg); color: var(--good); }
+.my-row-status.status-loss      { background: var(--bad-bg);  color: var(--bad);  }
+.my-row-status.status-cancelled { background: var(--bg-elev-3); color: var(--text-mute); }
+
 .my-row-detail {
-  font-size: 14px;
+  font-size: 13.5px;
   color: var(--text-dim);
   min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .my-row-detail strong { color: var(--text); font-weight: 600; }
 .my-row-amount {
-  font-family: var(--font-mono);
   font-weight: 700;
+  font-family: var(--font-mono);
   font-size: 14px;
+  color: var(--text);
+  text-align: right;
 }
-.my-row-amount.is-win  { color: var(--good); }
-.my-row-amount.is-loss { color: var(--bad); }
-.my-row-amount.is-pending { color: var(--gold); }
+.my-row-amount.amt-gain { color: var(--good); }
+.my-row-amount.amt-loss { color: var(--bad); }
 .my-row-time {
   color: var(--text-mute);
   font-size: 12px;
-  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 
 /* --- Leaderboard row ------------------------------------------------ */
-.leaderboard-rows .lb-row {
-  grid-template-columns: 48px 1fr auto;
+.lb-row {
+  grid-template-columns: 48px minmax(0, 1fr) auto auto;
+  gap: 12px;
 }
 .lb-rank {
-  width: 32px; height: 32px;
-  display: inline-flex; align-items: center; justify-content: center;
-  font-weight: 800;
-  font-size: 14px;
+  width: 36px; height: 36px;
   border-radius: 50%;
-  background: var(--bg-elev-2);
-  color: var(--text-dim);
+  display: grid; place-items: center;
+  background: var(--bg-elev-3);
   border: 1px solid var(--line);
+  font-weight: 800;
+  font-size: 13px;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
 }
-.lb-row.is-top1 .lb-rank { background: linear-gradient(135deg, #fbbf24, #d97706); color: #261901; border-color: transparent; }
-.lb-row.is-top2 .lb-rank { background: linear-gradient(135deg, #e5e7eb, #9ca3af); color: #1f2937; border-color: transparent; }
-.lb-row.is-top3 .lb-rank { background: linear-gradient(135deg, #d97706, #92400e); color: #fff;    border-color: transparent; }
-.lb-row.is-me   { background: rgba(139, 92, 246, 0.06); }
-.lb-row.is-me .lb-name { color: var(--primary-hi); font-weight: 700; }
+.lb-row.is-rank-1 .lb-rank { background: linear-gradient(135deg, #fde68a, #f59e0b); color: #422006; border-color: #f59e0b; }
+.lb-row.is-rank-2 .lb-rank { background: linear-gradient(135deg, #e5e7eb, #9ca3af); color: #1f2937; border-color: #9ca3af; }
+.lb-row.is-rank-3 .lb-rank { background: linear-gradient(135deg, #fdba74, #c2410c); color: #fff; border-color: #c2410c; }
+.lb-row.is-me {
+  background: color-mix(in srgb, var(--primary) 12%, transparent);
+  box-shadow: inset 3px 0 0 var(--primary);
+}
+.lb-row.is-me:hover { background: color-mix(in srgb, var(--primary) 18%, var(--bg-elev-2)); }
 .lb-name {
   font-weight: 600;
+  font-size: 14px;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  min-width: 0;
+}
+.lb-stats {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+  color: var(--text-dim);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.lb-stats span {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 3px 8px;
+  background: color-mix(in srgb, var(--bg-elev-2) 72%, transparent);
 }
 .lb-balance {
+  font-weight: 800;
   font-family: var(--font-mono);
-  font-weight: 700;
+  font-size: 15px;
   color: var(--gold);
+  text-align: right;
+  white-space: nowrap;
 }
 
-/* --- COIN ----------------------------------------------------------- */
-.coin {
-  position: relative;
-  display: inline-block;
-  perspective: 800px;
-}
-.coin-inner {
-  position: relative;
-  width: 100%; height: 100%;
-  transform-style: preserve-3d;
-  transition: transform 200ms;
-}
-.coin-face {
-  position: absolute; inset: 0;
-  border-radius: 50%;
+/* --- Pager ---------------------------------------------------------- */
+.pager {
   display: flex; align-items: center; justify-content: center;
-  font-weight: 900;
-  letter-spacing: -0.02em;
-  backface-visibility: hidden;
-  -webkit-backface-visibility: hidden;
-  user-select: none;
+  gap: 12px;
+  margin-top: 14px;
 }
-.coin-face span { display: block; }
-.coin-heads {
-  background:
-    radial-gradient(circle at 32% 30%, #fff3c2 0%, #fbbf24 45%, #b8770a 100%);
-  color: #5a3a00;
-  box-shadow:
-    inset 0 -4px 10px rgba(0,0,0,0.28),
-    inset 0 4px 10px rgba(255,255,255,0.35),
-    0 0 0 2px rgba(120, 80, 5, 0.5);
-}
-.coin-tails {
-  background:
-    radial-gradient(circle at 32% 30%, #f5f7fb 0%, #c8cdd9 45%, #6a7080 100%);
-  color: #2d3346;
-  transform: rotateY(180deg);
-  box-shadow:
-    inset 0 -4px 10px rgba(0,0,0,0.30),
-    inset 0 4px 10px rgba(255,255,255,0.45),
-    0 0 0 2px rgba(60, 65, 85, 0.5);
-}
-.coin-flipped-base .coin-inner { transform: rotateY(180deg); }
-
-/* Sizes */
-.coin-xs { width: 24px; height: 24px; }
-.coin-xs .coin-face { font-size: 12px; }
-.coin-sm { width: 40px; height: 40px; }
-.coin-sm .coin-face { font-size: 18px; }
-.coin-md { width: 84px; height: 84px; }
-.coin-md .coin-face { font-size: 38px; }
-.coin-xl { width: 170px; height: 170px; }
-.coin-xl .coin-face { font-size: 76px; }
-
-/* Idle slow spin (auth deco) */
-.coin.idle-spin .coin-inner {
-  animation: idle-spin 6s linear infinite;
-}
-@keyframes idle-spin {
-  from { transform: rotateY(0deg); }
-  to   { transform: rotateY(360deg); }
-}
-
-/* Flip toss — full choreography in one keyframe set.
-   --final-y is set by JS based on the result.
-   Heads → 1800deg (5 full rotations, lands face up).
-   Tails → 1980deg (5.5 rotations, lands face down). */
-.coin.is-tossing .coin-inner {
-  animation: flip-toss var(--toss-duration, 2600ms) cubic-bezier(0.18, 0.72, 0.16, 1) forwards;
-}
-@keyframes flip-toss {
-  0%   { transform: translateY(0) rotateY(0deg) rotateZ(0deg) scale(1); }
-  14%  { transform: translateY(-34px) rotateY(360deg) rotateZ(3deg) scale(1.03); }
-  34%  { transform: translateY(-108px) rotateY(900deg) rotateZ(-4deg) scale(1.06); }
-  58%  { transform: translateY(-122px) rotateY(1350deg) rotateZ(2deg) scale(1.05); }
-  78%  { transform: translateY(-42px) rotateY(1710deg) rotateZ(-1deg) scale(1.02); }
-  91%  { transform: translateY(0) rotateY(var(--final-y, 1800deg)) rotateZ(0deg) scale(1.04, 0.92); }
-  97%  { transform: translateY(-4px) rotateY(var(--final-y, 1800deg)) rotateZ(0deg) scale(0.99, 1.02); }
-  100% { transform: translateY(0) rotateY(var(--final-y, 1800deg)) rotateZ(0deg) scale(1); }
-}
-@media (prefers-reduced-motion: reduce) {
-  .coin.is-tossing .coin-inner {
-    animation: none;
-    transform: rotateY(var(--final-y, 0deg));
-    transition: transform 600ms ease-out;
-  }
-}
-
-/* Pre-toss idle wobble while waiting for the API */
-.coin.is-waiting .coin-inner {
-  animation: wait-bob 1.6s ease-in-out infinite;
-}
-@keyframes wait-bob {
-  0%, 100% { transform: translateY(0) rotateY(0); }
-  50%      { transform: translateY(-8px) rotateY(20deg); }
-}
-
-/* Coin shadow under the flip stage */
-.coin-xl .coin-shadow {
-  position: absolute;
-  bottom: -28px; left: 50%;
-  width: 60%; height: 16px;
-  transform: translateX(-50%);
-  background: radial-gradient(ellipse, rgba(0,0,0,0.55) 0%, transparent 70%);
-  border-radius: 50%;
-  filter: blur(4px);
-  animation: shadow-pulse 1.6s ease-in-out infinite;
-}
-.coin-xl.is-tossing .coin-shadow {
-  animation: shadow-toss var(--toss-duration, 2600ms) cubic-bezier(0.22, 0.7, 0.18, 1.02) forwards;
-}
-@keyframes shadow-pulse {
-  0%, 100% { transform: translateX(-50%) scaleX(1); opacity: 0.55; }
-  50%      { transform: translateX(-50%) scaleX(0.85); opacity: 0.4; }
-}
-@keyframes shadow-toss {
-  0%   { transform: translateX(-50%) scaleX(1);    opacity: 0.55; }
-  30%  { transform: translateX(-50%) scaleX(0.55); opacity: 0.25; }
-  55%  { transform: translateX(-50%) scaleX(0.5);  opacity: 0.20; }
-  85%  { transform: translateX(-50%) scaleX(0.7);  opacity: 0.30; }
-  100% { transform: translateX(-50%) scaleX(1);    opacity: 0.55; }
+.pager-info {
+  font-size: 13px;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
 }
 
 /* --- Modal ---------------------------------------------------------- */
 .modal-backdrop {
   position: fixed; inset: 0; z-index: 80;
-  background: color-mix(in srgb, var(--bg) 74%, transparent);
+  background: color-mix(in srgb, var(--bg) 70%, transparent);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   display: flex; align-items: center; justify-content: center;
   padding: 20px;
-  animation: backdrop-fade 240ms ease-out;
+  animation: backdrop-fade 220ms ease-out;
 }
 @keyframes backdrop-fade {
   from { opacity: 0; }
@@ -963,7 +983,10 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   box-shadow: var(--shadow-lg);
   animation: modal-rise 320ms cubic-bezier(0.2, 0.8, 0.2, 1);
   text-align: center;
+  max-height: calc(100dvh - 40px);
+  overflow-y: auto;
 }
+.modal-sm { max-width: 380px; }
 @keyframes modal-rise {
   from { opacity: 0; transform: translateY(20px) scale(0.96); }
   to   { opacity: 1; transform: translateY(0) scale(1); }
@@ -975,7 +998,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 }
 .flip-stage {
   position: relative;
-  height: 230px;
+  height: 240px;
   display: flex; align-items: center; justify-content: center;
   margin: 16px 0 18px;
 }
@@ -988,7 +1011,11 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .flip-result {
   display: flex; flex-direction: column; gap: 8px;
   margin-top: 14px;
-  animation: card-rise 320ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  animation: result-rise 320ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@keyframes result-rise {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 .result-row {
   display: flex; align-items: center; justify-content: space-between;
@@ -997,6 +1024,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   border: 1px solid var(--line);
   border-radius: var(--radius-md);
   font-size: 14px;
+  text-align: left;
 }
 .result-row.row-win  { border-color: rgba(34, 197, 94, 0.35); background: var(--good-bg); }
 .result-row.row-loss { border-color: rgba(239, 68, 68, 0.35); background: var(--bad-bg); }
@@ -1004,16 +1032,392 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .result-val { font-weight: 700; font-family: var(--font-mono); }
 .flip-result .btn { margin-top: 6px; }
 
+/* Confirm modal */
+.confirm-body {
+  color: var(--text-dim);
+  font-size: 14px;
+  line-height: 1.55;
+  margin: 8px 0 18px;
+}
+.confirm-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+/* Profile modal */
+.profile-modal-card { text-align: left; }
+.profile-modal-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+.eyebrow {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-mute);
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+.profile-stats-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.stat-card {
+  display: flex; flex-direction: column;
+  gap: 4px;
+  padding: 12px;
+  background: var(--bg-elev-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+}
+.stat-card span {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-mute);
+  font-weight: 600;
+}
+.stat-card strong {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text);
+  font-family: var(--font-mono);
+}
+.profile-note {
+  margin-top: 12px;
+  color: var(--text-mute);
+  font-size: 12px;
+}
+
+/* --- Password meter ------------------------------------------------- */
+.password-meter {
+  display: grid;
+  gap: 6px;
+  margin-top: -6px;
+  margin-bottom: 14px;
+}
+.password-meter-bar {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--bg-elev-3);
+  overflow: hidden;
+  border: 1px solid var(--line);
+}
+.password-meter-bar span {
+  display: block;
+  height: 100%;
+  width: 0%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--bad), var(--warn), var(--good));
+  transition: width 180ms ease;
+}
+.password-meter-text {
+  font-size: 11.5px;
+  color: var(--text-mute);
+}
+.password-meter[data-score="0"] .password-meter-text,
+.password-meter[data-score="1"] .password-meter-text { color: var(--bad); }
+.password-meter[data-score="2"] .password-meter-text { color: var(--warn); }
+.password-meter[data-score="3"] .password-meter-text,
+.password-meter[data-score="4"] .password-meter-text { color: var(--good); }
+
+/* =====================================================================
+   STATIC COIN — used in cards, rows, and decorative spots.
+   Heads = gold, Tails = silver. Each face's background is fully scoped to
+   its modifier so there is no possibility of cross-contamination.
+   ===================================================================== */
+.static-coin {
+  --static-coin-size: 48px;
+  width: var(--static-coin-size);
+  height: var(--static-coin-size);
+  border-radius: 50%;
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  isolation: isolate;
+  overflow: hidden;
+  box-sizing: border-box;
+  flex: 0 0 auto;
+  font-weight: 900;
+  font-size: calc(var(--static-coin-size) * 0.46);
+  line-height: 1;
+  letter-spacing: -0.05em;
+  filter: drop-shadow(0 6px 10px rgba(0,0,0,0.28));
+}
+.static-coin > span {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 1.3em; height: 1.3em;
+  border-radius: 50%;
+}
+.static-coin::before {
+  content: "";
+  position: absolute;
+  inset: 14%;
+  border-radius: 50%;
+  border: max(1px, calc(var(--static-coin-size) * 0.04)) solid currentColor;
+  opacity: 0.28;
+  z-index: 1;
+}
+.static-coin::after {
+  content: "";
+  position: absolute;
+  inset: 30%;
+  border-radius: 50%;
+  border: 1px solid rgba(255,255,255,0.35);
+  box-shadow: inset 0 3px 8px rgba(255,255,255,0.18), inset 0 -4px 9px rgba(0,0,0,0.16);
+  opacity: 0.7;
+  z-index: 1;
+}
+
+/* HEADS — pure gold */
+.static-coin.static-coin-heads {
+  color: #5b3700;
+  background:
+    radial-gradient(circle at 30% 22%, rgba(255,255,255,0.92) 0%, transparent 12%),
+    radial-gradient(circle at 50% 48%, #fff0b6 0%, #f7bd26 54%, #b87309 76%, #6b4200 100%);
+  border: max(2px, calc(var(--static-coin-size) * 0.06)) solid #b87309;
+  box-shadow:
+    inset 0 8px 14px rgba(255,255,255,0.32),
+    inset 0 -10px 18px rgba(76, 42, 0, 0.4),
+    0 0 0 1px rgba(255, 211, 87, 0.22);
+}
+.static-coin.static-coin-heads > span {
+  background: rgba(255, 224, 132, 0.32);
+  border: 1px solid rgba(91, 55, 0, 0.25);
+  text-shadow: 0 1px 0 rgba(255,255,255,0.3);
+}
+
+/* TAILS — silver */
+.static-coin.static-coin-tails {
+  color: #1f2937;
+  background:
+    radial-gradient(circle at 30% 22%, rgba(255,255,255,1) 0%, transparent 12%),
+    radial-gradient(circle at 50% 48%, #ffffff 0%, #e5eaf1 53%, #a8b3c1 76%, #4b5563 100%);
+  border: max(2px, calc(var(--static-coin-size) * 0.06)) solid #94a3b8;
+  box-shadow:
+    inset 0 8px 14px rgba(255,255,255,0.46),
+    inset 0 -10px 18px rgba(15, 23, 42, 0.28),
+    0 0 0 1px rgba(226, 232, 240, 0.25);
+}
+.static-coin.static-coin-tails > span {
+  background: rgba(255, 255, 255, 0.36);
+  border: 1px solid rgba(31, 41, 55, 0.20);
+  text-shadow: 0 1px 0 rgba(255,255,255,0.45);
+}
+
+.static-coin-xs     { --static-coin-size: 26px; font-size: 13px; }
+.static-coin-sm     { --static-coin-size: 42px; }
+.static-coin-md     { --static-coin-size: 80px; }
+.static-coin-choice { --static-coin-size: 48px; }
+
+.choice-card:hover .static-coin-choice,
+.choice-card:has(input:checked) .static-coin-choice {
+  transform: translateY(-1px) scale(1.04);
+  transition: transform 150ms ease;
+}
+
+/* =====================================================================
+   FLIP COIN — the animated coin in the modal.
+   Self-contained: a 3D X-axis flip with both faces mounted via
+   transform: translateZ. Heads-side and tails-side colors are set on
+   .flip-face-heads and .flip-face-tails directly. There is NO shared
+   silver layer behind heads. The "edge rim" is hidden behind faces.
+   ===================================================================== */
+.flip-coin {
+  --flip-size: clamp(160px, 52vw, 200px);
+  --flip-depth: clamp(8px, 2.4vw, 14px);
+  --final-x: 2160deg;
+  --toss-duration: 1500ms;
+  width: var(--flip-size);
+  height: var(--flip-size);
+  position: relative;
+  margin: 0 auto;
+  perspective: 1400px;
+  transform-style: preserve-3d;
+}
+.flip-coin-inner {
+  position: absolute;
+  inset: 0;
+  transform-style: preserve-3d;
+  transform-origin: center center;
+  will-change: transform;
+}
+
+/* Face shared base */
+.flip-face {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-weight: 900;
+  font-size: clamp(64px, 22vw, 88px);
+  line-height: 1;
+  letter-spacing: -0.05em;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  overflow: hidden;
+}
+.flip-face::before {
+  content: "";
+  position: absolute;
+  inset: 14%;
+  border-radius: 50%;
+  border: max(2px, calc(var(--flip-depth) * 0.3)) solid currentColor;
+  opacity: 0.28;
+}
+.flip-face::after {
+  content: "";
+  position: absolute;
+  inset: 30%;
+  border-radius: 50%;
+  border: 1.5px solid rgba(255,255,255,0.32);
+  box-shadow: inset 0 8px 18px rgba(255,255,255,0.2), inset 0 -10px 20px rgba(0,0,0,0.18);
+  opacity: 0.74;
+}
+.flip-face > span {
+  position: relative;
+  z-index: 2;
+  width: 1.3em; height: 1.3em;
+  border-radius: 50%;
+  display: grid; place-items: center;
+}
+
+/* HEADS — pure gold, scoped to .flip-face-heads only */
+.flip-face-heads {
+  transform: translateZ(var(--flip-depth));
+  color: #5b3700;
+  background:
+    radial-gradient(circle at 30% 22%, rgba(255,255,255,0.92) 0%, transparent 12%),
+    radial-gradient(circle at 50% 48%, #fff0b6 0%, #f7bd26 54%, #b87309 76%, #6b4200 100%);
+  border: max(3px, calc(var(--flip-depth) * 0.5)) solid #b87309;
+  box-shadow:
+    inset 0 14px 28px rgba(255,255,255,0.3),
+    inset 0 -22px 30px rgba(76, 42, 0, 0.4);
+}
+.flip-face-heads > span {
+  background: rgba(255, 224, 132, 0.3);
+  border: 1px solid rgba(91, 55, 0, 0.22);
+  text-shadow: 0 3px 0 rgba(255,255,255,0.28), 0 -2px 0 rgba(58, 32, 0, 0.25);
+}
+
+/* TAILS — silver, scoped to .flip-face-tails only.
+   Rotated 180° around X so it appears on the back. */
+.flip-face-tails {
+  transform: rotateX(180deg) translateZ(var(--flip-depth));
+  color: #1f2937;
+  background:
+    radial-gradient(circle at 30% 22%, rgba(255,255,255,1) 0%, transparent 12%),
+    radial-gradient(circle at 50% 48%, #ffffff 0%, #e5eaf1 53%, #a8b3c1 76%, #4b5563 100%);
+  border: max(3px, calc(var(--flip-depth) * 0.5)) solid #94a3b8;
+  box-shadow:
+    inset 0 14px 28px rgba(255,255,255,0.46),
+    inset 0 -22px 30px rgba(15, 23, 42, 0.28);
+}
+.flip-face-tails > span {
+  background: rgba(255, 255, 255, 0.36);
+  border: 1px solid rgba(31, 41, 55, 0.20);
+  text-shadow: 0 3px 0 rgba(255,255,255,0.6), 0 -2px 0 rgba(15, 23, 42, 0.18);
+}
+
+/* Drop shadow */
+.flip-coin-shadow {
+  position: absolute;
+  left: 50%;
+  bottom: -22px;
+  width: 70%;
+  height: 18px;
+  border-radius: 50%;
+  transform: translateX(-50%);
+  background: radial-gradient(ellipse at center, rgba(0,0,0,0.40) 0%, rgba(0,0,0,0.10) 60%, transparent 72%);
+  filter: blur(2px);
+  pointer-events: none;
+}
+
+/* Idle wobble */
+.flip-coin.is-waiting .flip-coin-inner {
+  animation: flip-wobble 1300ms ease-in-out infinite;
+}
+@keyframes flip-wobble {
+  0%, 100% { transform: translate3d(0,0,0) rotateX(-6deg) rotateY(-8deg); }
+  50%      { transform: translate3d(0,-6px,0) rotateX(6deg) rotateY(8deg); }
+}
+
+/* Active toss: vertical X-axis flip with arc.
+   Heads = even half-turns (lands face up).
+   Tails = odd half-turns (lands face down → rotateX(180°) of tails shows up). */
+.flip-coin.is-tossing .flip-coin-inner {
+  animation: flip-toss var(--toss-duration) cubic-bezier(0.16, 0.76, 0.18, 1) forwards;
+}
+@keyframes flip-toss {
+  0%   { transform: translate3d(0, 0, 0)     rotateX(0deg)                                   scale(1); }
+  16%  { transform: translate3d(0, -56px, 0) rotateX(540deg)                                 scale(1.04); }
+  36%  { transform: translate3d(0, -110px, 0) rotateX(1080deg)                               scale(1.06); }
+  56%  { transform: translate3d(0, -110px, 0) rotateX(1620deg)                               scale(1.06); }
+  76%  { transform: translate3d(0, -50px, 0)  rotateX(calc(var(--final-x) - 200deg))         scale(1.03); }
+  88%  { transform: translate3d(0, 0, 0)      rotateX(calc(var(--final-x) + 14deg))          scale(1.05, 0.94); }
+  94%  { transform: translate3d(0, -6px, 0)   rotateX(calc(var(--final-x) - 4deg))           scale(0.99, 1.03); }
+  100% { transform: translate3d(0, 0, 0)      rotateX(var(--final-x))                        scale(1); }
+}
+.flip-coin.is-tossing .flip-coin-shadow {
+  animation: flip-shadow var(--toss-duration) cubic-bezier(0.16, 0.76, 0.18, 1) forwards;
+}
+@keyframes flip-shadow {
+  0%, 100% { transform: translateX(-50%) scaleX(1); opacity: 0.42; }
+  36%      { transform: translateX(-50%) scaleX(0.45); opacity: 0.16; }
+  56%      { transform: translateX(-50%) scaleX(0.45); opacity: 0.14; }
+  88%      { transform: translateX(-50%) scaleX(0.96); opacity: 0.40; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .flip-coin.is-waiting .flip-coin-inner,
+  .flip-coin.is-tossing .flip-coin-inner,
+  .flip-coin.is-tossing .flip-coin-shadow {
+    animation: none;
+  }
+  .flip-coin.is-tossing .flip-coin-inner {
+    transform: rotateX(var(--final-x));
+    transition: transform 480ms ease-out;
+  }
+}
+
+/* --- Footer --------------------------------------------------------- */
+.app-footer {
+  position: fixed;
+  left: 0; right: 0;
+  bottom: 10px;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--text-mute);
+  opacity: 0.78;
+  pointer-events: none;
+  padding: 0 12px;
+}
+.app-footer-sep { opacity: 0.5; }
+
 /* --- Mobile --------------------------------------------------------- */
-@media (max-width: 640px) {
-  main { padding: 18px 14px 60px; }
-  .topbar { padding: 10px 14px; }
-  .user-name { display: none !important; }
+@media (max-width: 760px) {
+  main { padding: 18px 12px 76px; }
+  .topbar { padding: 10px 14px; flex-wrap: wrap; }
+  .brand-text { max-width: 44vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .topbar-right { width: 100%; justify-content: flex-end; gap: 6px; }
+  .user-name { max-width: 120px; font-size: 12.5px; padding: 5px 10px; }
 
   .auth-card { padding: 22px 18px 18px; border-radius: var(--radius-lg); }
   .auth-title { font-size: 24px; }
-  .auth-coin-deco .coin-md { width: 66px; height: 66px; }
-  .auth-coin-deco .coin-md .coin-face { font-size: 30px; }
 
   .card { padding: 18px; border-radius: var(--radius-md); }
   .card-title { font-size: 17px; }
@@ -1022,8 +1426,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   .choice-card { padding: 12px; }
 
   .panel-toolbar { gap: 8px; }
-  .filters { width: 100%; justify-content: flex-start; }
-  .filter .prefix-input { width: 90px; }
+  .filter .prefix-input { width: 96px; }
 
   /* Game row collapses to 2 lines */
   .game-row {
@@ -1042,1920 +1445,38 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
     grid-template-columns: auto 1fr auto;
     grid-template-areas:
       "status detail amount"
-      "time   time   time";
+      "time   time   cancel";
     row-gap: 6px;
   }
   .my-row-status { grid-area: status; }
   .my-row-detail { grid-area: detail; }
   .my-row-amount { grid-area: amount; text-align: right; }
-  .my-row-time   { grid-area: time; color: var(--text-mute); }
-
-  .modal { padding: 22px 18px 18px; border-radius: var(--radius-lg); }
-  .flip-stage { height: 200px; }
-  .coin-xl { width: 140px; height: 140px; }
-  .coin-xl .coin-face { font-size: 64px; }
-
-  .balance-pill .balance-label { display: none; }
-  .balance-pill { padding: 6px 12px; }
-  .result-banner { top: calc(env(safe-area-inset-top, 0px) + 10px); align-items: flex-start; }
-  .result-banner-coin { width: 38px; height: 38px; }
-}
-
-
-@media (max-width: 380px) {
-  .auth-title { font-size: 22px; }
-  .auth-subtitle { font-size: 13px; }
-  .choice-row { grid-template-columns: 1fr; }
-  .filter .prefix-input { width: 80px; }
-}
-@media (max-height: 720px) {
-  .view-auth { align-items: flex-start; padding-top: 10px; padding-bottom: 10px; }
-  .auth-card { padding-top: 18px; padding-bottom: 16px; }
-  .auth-coin-deco { margin-bottom: 8px; }
-  .auth-coin-deco .coin-md { width: 58px; height: 58px; }
-  .auth-coin-deco .coin-md .coin-face { font-size: 26px; }
-  .auth-title { font-size: 23px; margin-bottom: 4px; }
-  .auth-subtitle { font-size: 13px; line-height: 1.4; }
-  .field { margin-bottom: 10px; }
-  .auth-fineprint { font-size: 11px; }
-}
-
-@media (max-width: 420px) {
-  .theme-toggle { right: 10px; bottom: 10px; width: 38px; height: 38px; }
-  .app-footer { left: 10px; bottom: 8px; }
-}
-
-/* =====================================================================
-   v0.4.1 polish: smoother coin, better pagination, escrow/cancel UI
-   ===================================================================== */
-
-/* Whole-dollar inputs should feel like money boxes, not decimal fields. */
-.prefix-input input { font-variant-numeric: tabular-nums; }
-
-/* Pagers */
-.pager {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  margin-top: 12px;
-}
-.pager-info {
-  min-width: 110px;
-  text-align: center;
-  color: var(--text-dim);
-  font-size: 13px;
-  font-weight: 700;
-}
-.pager .btn[disabled] {
-  opacity: 0.45;
-  cursor: not-allowed;
-}
-
-/* More card-like open games. */
-.rows {
-  gap: 8px;
-  background: transparent;
-  border: 0;
-  border-radius: 0;
-  overflow: visible;
-}
-.row {
-  position: relative;
-  background: color-mix(in srgb, var(--bg-elev) 94%, transparent);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-sm);
-  overflow: hidden;
-}
-.row::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 12px;
-  bottom: 12px;
-  width: 3px;
-  border-radius: 999px;
-  background: linear-gradient(180deg, var(--primary), var(--gold));
-  opacity: 0.75;
-}
-.row:last-child { border-bottom: 1px solid var(--line); }
-.row:hover {
-  background: var(--bg-elev-2);
-  transform: translateY(-1px);
-  transition: background 150ms, transform 150ms, border-color 150ms;
-  border-color: var(--line-2);
-}
-.game-row-wager, .lb-balance, .my-row-amount { text-align: right; }
-
-/* My games now has an optional cancel action. */
-.my-row {
-  grid-template-columns: auto 1.4fr auto auto auto;
-}
-.my-row-cancel {
-  justify-self: end;
-  white-space: nowrap;
-}
-
-/* Better fixed popup: auto-dismissed by JS after 20s. */
-.result-banner {
-  animation: banner-in 240ms ease-out both;
-}
-@keyframes banner-in {
-  from { opacity: 0; transform: translateX(-50%) translateY(-12px) scale(0.98); }
-  to   { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
-}
-
-/* Rebuilt coin: clearer depth, fewer expensive effects, smoother mobile FPS. */
-.coin {
-  perspective: 1100px;
-  transform: translateZ(0);
-  contain: layout paint;
-}
-.coin-inner {
-  will-change: transform;
-  transform-style: preserve-3d;
-}
-.coin::after {
-  content: "";
-  position: absolute;
-  inset: 7%;
-  border-radius: 50%;
-  pointer-events: none;
-  background: linear-gradient(120deg, rgba(255,255,255,0.28), transparent 38%, rgba(0,0,0,0.12) 70%, transparent);
-  mix-blend-mode: screen;
-  opacity: 0.45;
-  transform: translateZ(3px);
-}
-.coin-face {
-  border: 5px solid rgba(255,255,255,0.16);
-  box-shadow:
-    inset 0 10px 18px rgba(255,255,255,0.18),
-    inset 0 -14px 22px rgba(0,0,0,0.28),
-    0 8px 22px rgba(0,0,0,0.22);
-}
-.coin-face::before {
-  content: "";
-  position: absolute;
-  inset: 13%;
-  border-radius: 50%;
-  border: 2px dashed rgba(91,58,0,0.28);
-}
-.coin-face::after {
-  content: "";
-  position: absolute;
-  inset: 25%;
-  border-radius: 50%;
-  background: rgba(255,255,255,0.10);
-  box-shadow: inset 0 -6px 12px rgba(0,0,0,0.12);
-}
-.coin-face span {
-  position: relative;
-  z-index: 1;
-  text-shadow: 0 2px 0 rgba(255,255,255,0.22), 0 -1px 0 rgba(0,0,0,0.22);
-}
-.coin-heads {
-  background:
-    radial-gradient(circle at 34% 26%, #fff7cc 0 12%, transparent 13%),
-    radial-gradient(circle at 34% 30%, #ffe287 0%, #f5b301 46%, #a86d06 100%);
-}
-.coin-tails {
-  background:
-    radial-gradient(circle at 34% 26%, #ffffff 0 12%, transparent 13%),
-    radial-gradient(circle at 34% 30%, #f9fafb 0%, #cdd3df 48%, #667085 100%);
-}
-.coin-xl { width: clamp(132px, 34vw, 178px); height: clamp(132px, 34vw, 178px); }
-.coin-xl .coin-face { font-size: clamp(58px, 15vw, 78px); }
-.flip-stage {
-  min-height: clamp(190px, 44vh, 270px);
-  display: grid;
-  place-items: center;
-  overflow: visible;
-}
-.coin-xl .coin-shadow {
-  filter: blur(2px);
-  will-change: transform, opacity;
-}
-.coin.is-waiting .coin-inner {
-  animation: wait-bob 1400ms ease-in-out infinite;
-}
-@keyframes wait-bob {
-  0%, 100% { transform: translate3d(0,0,0) rotateX(0deg) rotateY(-10deg); }
-  50%      { transform: translate3d(0,-10px,0) rotateX(8deg) rotateY(14deg); }
-}
-.coin.is-tossing .coin-inner {
-  animation: flip-toss var(--toss-duration, 2600ms) cubic-bezier(.18,.84,.24,1) forwards;
-}
-@keyframes flip-toss {
-  0%   { transform: translate3d(0,0,0) rotateX(0deg)    rotateY(0deg)                 rotateZ(0deg)   scale(1); }
-  12%  { transform: translate3d(0,-38px,0) rotateX(160deg) rotateY(430deg)             rotateZ(6deg)   scale(1.03); }
-  28%  { transform: translate3d(0,-118px,0) rotateX(430deg) rotateY(900deg)            rotateZ(-8deg)  scale(1.06); }
-  46%  { transform: translate3d(0,-158px,0) rotateX(740deg) rotateY(1360deg)           rotateZ(5deg)   scale(1.05); }
-  64%  { transform: translate3d(0,-108px,0) rotateX(1010deg) rotateY(1740deg)          rotateZ(-4deg)  scale(1.03); }
-  82%  { transform: translate3d(0,-22px,0) rotateX(1220deg) rotateY(calc(var(--final-y, 2160deg) - 90deg)) rotateZ(2deg) scale(1.01); }
-  92%  { transform: translate3d(0,0,0) rotateX(1260deg) rotateY(var(--final-y, 2160deg)) rotateZ(0deg) scale(1.06, .92); }
-  97%  { transform: translate3d(0,-5px,0) rotateX(1260deg) rotateY(var(--final-y, 2160deg)) rotateZ(0deg) scale(.98, 1.03); }
-  100% { transform: translate3d(0,0,0) rotateX(1260deg) rotateY(var(--final-y, 2160deg)) rotateZ(0deg) scale(1); }
-}
-@keyframes shadow-toss {
-  0%   { transform: translateX(-50%) scaleX(1);    opacity: 0.48; }
-  30%  { transform: translateX(-50%) scaleX(0.42); opacity: 0.20; }
-  55%  { transform: translateX(-50%) scaleX(0.35); opacity: 0.16; }
-  84%  { transform: translateX(-50%) scaleX(0.78); opacity: 0.32; }
-  100% { transform: translateX(-50%) scaleX(1);    opacity: 0.48; }
-}
-
-/* Tighter auth page for phones and short screens. */
-body[data-view="auth"] main {
-  min-height: 100dvh;
-  display: grid;
-  place-items: center;
-  padding: clamp(8px, 2vh, 18px) 16px;
-}
-.auth-card {
-  width: min(430px, 100%);
-  padding: clamp(16px, 2.6vh, 26px);
-}
-.auth-title { font-size: clamp(26px, 5vh, 34px); }
-.auth-subtitle { font-size: clamp(13px, 2.1vh, 15px); }
-.auth-form { gap: clamp(8px, 1.4vh, 12px); }
-.auth-fineprint { margin-top: clamp(10px, 1.8vh, 16px); }
-@media (max-height: 720px) {
-  .auth-coin-deco { display: none; }
-  .auth-card { padding: 14px; }
-  .auth-subtitle { display: none; }
-  .auth-tabs { margin-top: 8px; }
-  .field-label { margin-bottom: 4px; }
-  input { padding-block: 9px; }
-  .btn-lg { padding-block: 10px; }
-}
-
-/* Mobile performance and layout polish. */
-@media (max-width: 720px) {
-  .bg-orb { filter: blur(48px); animation: none; }
-  .bg-grid { opacity: 0.65; }
-  .row:hover { transform: none; }
-  .game-row {
-    grid-template-columns: 1fr auto;
-    grid-template-areas:
-      "creator wager"
-      "pick join";
-  }
-  .game-row-creator { grid-area: creator; }
-  .game-row-pick { grid-area: pick; }
-  .game-row-wager { grid-area: wager; }
-  .game-row-join { grid-area: join; justify-self: end; }
-  .my-row {
-    grid-template-columns: auto 1fr auto;
-    grid-template-areas:
-      "status detail amount"
-      "time time cancel";
-  }
-  .my-row-status { grid-area: status; }
-  .my-row-detail { grid-area: detail; }
-  .my-row-amount { grid-area: amount; }
-  .my-row-time { grid-area: time; }
-  .my-row-cancel { grid-area: cancel; }
-  .pager { justify-content: space-between; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .bg-orb, .coin.idle-spin .coin-inner, .row, .result-banner { animation: none !important; transition: none !important; }
-}
-
-/* =====================================================================
-   v0.5.1 frontend polish: smoother loading, cleaner toss, safer modal
-   ===================================================================== */
-
-body {
-  background:
-    radial-gradient(circle at 20% -10%, color-mix(in srgb, var(--primary) 18%, transparent), transparent 36%),
-    radial-gradient(circle at 90% 10%, color-mix(in srgb, var(--gold) 12%, transparent), transparent 28%),
-    linear-gradient(180deg, var(--bg) 0%, color-mix(in srgb, var(--bg) 94%, #111827 6%) 100%);
-}
-body[data-theme="light"] {
-  --bg:           #f8f7ff;
-  --bg-elev:      rgba(255,255,255,0.92);
-  --bg-elev-2:    #f3f0ff;
-  --bg-elev-3:    #ebe7fb;
-  --line:         #ded8f0;
-  --line-2:       #cfc6e7;
-  --text:         #171322;
-  --text-dim:     #574f68;
-  --text-mute:    #887f98;
-  --gold:         #c98205;
-  background:
-    radial-gradient(circle at 18% -10%, rgba(124,58,237,0.14), transparent 34%),
-    radial-gradient(circle at 92% 5%, rgba(251,191,36,0.18), transparent 30%),
-    linear-gradient(180deg, #fbfaff 0%, #f4f1ff 100%);
-}
-
-/* Loading states now look intentional instead of plain text rows. */
-.loading-card {
-  position: relative;
-  padding: 14px;
-  text-align: left;
-  overflow: hidden;
-  border-style: solid;
-  background:
-    linear-gradient(135deg, color-mix(in srgb, var(--bg-elev) 92%, transparent), color-mix(in srgb, var(--bg-elev-2) 86%, transparent));
-  box-shadow: var(--shadow-sm);
-}
-.loading-card::before {
-  content: attr(data-label);
-  display: block;
-  margin: 0 0 12px;
-  color: var(--text-dim);
-  font-size: 13px;
-  font-weight: 700;
-}
-.loading-card:not([data-label])::before { content: "Loading…"; }
-.loading-card.is-error::before { content: "Something went wrong"; color: var(--bad); }
-.loading-skeleton {
-  display: grid;
-  gap: 8px;
-}
-.skeleton-row {
-  display: grid;
-  grid-template-columns: 36px 1fr 72px;
-  align-items: center;
-  gap: 10px;
-  padding: 11px 12px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-md);
-  background: color-mix(in srgb, var(--bg-elev-2) 72%, transparent);
-}
-.skeleton-dot,
-.skeleton-line,
-.skeleton-pill {
-  display: block;
-  border-radius: 999px;
-  background: linear-gradient(90deg,
-    color-mix(in srgb, var(--line) 66%, transparent) 0%,
-    color-mix(in srgb, var(--line-2) 82%, transparent) 45%,
-    color-mix(in srgb, var(--line) 66%, transparent) 100%);
-  background-size: 220% 100%;
-  animation: skeleton-shimmer 1150ms ease-in-out infinite;
-}
-.skeleton-dot { width: 28px; height: 28px; }
-.skeleton-line { width: min(100%, 280px); height: 12px; }
-.skeleton-pill { width: 68px; height: 24px; justify-self: end; }
-@keyframes skeleton-shimmer {
-  0% { background-position: 120% 0; opacity: 0.62; }
-  50% { opacity: 1; }
-  100% { background-position: -120% 0; opacity: 0.62; }
-}
-.rows.is-refreshing .row {
-  opacity: 0.62;
-  transform: scale(0.997);
-}
-
-/* Small QoL states. */
-.btn-danger {
-  background: rgba(239, 68, 68, 0.12);
-  border-color: rgba(239, 68, 68, 0.36);
-  color: #fca5a5;
-  box-shadow: none;
-}
-.btn-danger:not(:disabled):hover {
-  background: rgba(239, 68, 68, 0.18);
-  border-color: rgba(239, 68, 68, 0.52);
-  color: #fecaca;
-}
-body[data-theme="light"] .btn-danger { color: #b91c1c; }
-.row {
-  transition: background 160ms ease, transform 160ms ease, border-color 160ms ease, opacity 160ms ease;
-}
-.row:focus-within {
-  border-color: var(--primary);
-  box-shadow: var(--shadow-sm), 0 0 0 3px rgba(139, 92, 246, 0.14);
-}
-
-/* Keep popups inside the viewport, even on short screens or phone browsers. */
-.modal-backdrop {
-  align-items: flex-start;
-  overflow-y: auto;
-  padding: max(12px, env(safe-area-inset-top, 0px)) 14px max(12px, env(safe-area-inset-bottom, 0px));
-}
-.modal {
-  width: min(100%, 460px);
-  max-height: calc(100dvh - 24px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
-  overflow: auto;
-  overscroll-behavior: contain;
-  margin: auto 0;
-  padding: clamp(16px, 3vh, 24px);
-}
-.flip-stage {
-  height: auto;
-  min-height: clamp(148px, 30vh, 214px);
-  margin: clamp(8px, 2vh, 14px) 0 clamp(8px, 2vh, 14px);
-  overflow: hidden;
-  border-radius: var(--radius-lg);
-  background: radial-gradient(circle at 50% 56%, color-mix(in srgb, var(--primary) 10%, transparent), transparent 58%);
-}
-.flip-title { margin-bottom: 4px; }
-.flip-result {
-  gap: clamp(6px, 1.2vh, 8px);
-  margin-top: clamp(8px, 1.6vh, 12px);
-}
-.result-row { padding: clamp(8px, 1.7vh, 10px) 14px; }
-.coin-xl { width: clamp(112px, 28vh, 154px); height: clamp(112px, 28vh, 154px); }
-.coin-xl .coin-face { font-size: clamp(48px, 12vh, 68px); }
-.coin-xl .coin-shadow { bottom: -13px; }
-
-/* New toss: less chaotic, more premium, and constrained to the stage. */
-.coin.is-waiting .coin-inner {
-  animation: wait-tilt 1500ms ease-in-out infinite;
-}
-@keyframes wait-tilt {
-  0%, 100% { transform: translate3d(0,0,0) rotateX(4deg) rotateY(-12deg) rotateZ(-1deg); }
-  50%      { transform: translate3d(0,-7px,0) rotateX(-5deg) rotateY(14deg) rotateZ(1deg); }
-}
-.coin.is-tossing .coin-inner {
-  animation: flip-toss-clean var(--toss-duration, 2200ms) cubic-bezier(.2,.78,.2,1) forwards;
-}
-@keyframes flip-toss-clean {
-  0%   { transform: translate3d(0, 0, 0) scale(1) rotateX(0deg) rotateY(0deg) rotateZ(0deg); }
-  14%  { transform: translate3d(-8px, -28px, 0) scale(1.03) rotateX(120deg) rotateY(340deg) rotateZ(-5deg); }
-  34%  { transform: translate3d(10px, -62px, 0) scale(1.06) rotateX(300deg) rotateY(820deg) rotateZ(4deg); }
-  56%  { transform: translate3d(-6px, -42px, 0) scale(1.04) rotateX(520deg) rotateY(1280deg) rotateZ(-3deg); }
-  76%  { transform: translate3d(4px, -12px, 0) scale(1.02) rotateX(650deg) rotateY(calc(var(--final-y, 1800deg) - 115deg)) rotateZ(2deg); }
-  90%  { transform: translate3d(0, 0, 0) scale(1.05, .94) rotateX(720deg) rotateY(var(--final-y, 1800deg)) rotateZ(0deg); }
-  96%  { transform: translate3d(0, -5px, 0) scale(.99, 1.02) rotateX(720deg) rotateY(var(--final-y, 1800deg)) rotateZ(0deg); }
-  100% { transform: translate3d(0, 0, 0) scale(1) rotateX(720deg) rotateY(var(--final-y, 1800deg)) rotateZ(0deg); }
-}
-.coin-xl.is-tossing .coin-shadow { animation: shadow-toss-clean var(--toss-duration, 2200ms) cubic-bezier(.2,.78,.2,1) forwards; }
-@keyframes shadow-toss-clean {
-  0%, 100% { transform: translateX(-50%) scaleX(1); opacity: .42; }
-  34%      { transform: translateX(-50%) scaleX(.48); opacity: .18; }
-  58%      { transform: translateX(-50%) scaleX(.62); opacity: .22; }
-  88%      { transform: translateX(-50%) scaleX(.9); opacity: .36; }
-}
-
-@media (max-height: 680px) {
-  .modal { padding: 12px; }
-  .flip-stage { min-height: 128px; margin-block: 6px; }
-  .flip-title { font-size: 16px; }
-  .flip-sub { margin-bottom: 4px; }
-  .result-row { padding-block: 7px; font-size: 13px; }
-  .flip-result .btn { padding-block: 9px; }
-  .coin-xl { width: 106px; height: 106px; }
-  .coin-xl .coin-face { font-size: 46px; }
-}
-@media (max-width: 720px) {
-  .game-row {
-    grid-template-areas:
-      "creator wager"
-      "pick join";
-  }
-  .loading-card { padding: 12px; }
-  .skeleton-row { grid-template-columns: 30px 1fr 58px; padding: 10px; }
-  .skeleton-pill { width: 54px; }
-}
-@media (prefers-reduced-motion: reduce) {
-  .loading-card *, .coin.is-waiting .coin-inner, .coin.is-tossing .coin-inner, .coin-xl.is-tossing .coin-shadow {
-    animation: none !important;
-  }
-}
-
-/* v0.6 requested polish: no $ prefix duplicated in wager hints, lost state, and a cleaner 3D coin toss. */
-.lost-card {
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  align-items: center;
-  gap: 16px;
-  margin-bottom: 16px;
-  border-color: rgba(239, 68, 68, 0.34);
-  background:
-    radial-gradient(circle at 16% 50%, rgba(239, 68, 68, 0.18), transparent 34%),
-    linear-gradient(135deg, color-mix(in srgb, var(--bad-bg) 42%, var(--bg-elev)), var(--bg-elev));
-  box-shadow: var(--shadow), 0 0 0 1px rgba(239, 68, 68, 0.08);
-}
-.lost-copy h2 {
-  margin: 0 0 2px;
-  font-size: clamp(22px, 3.2vw, 30px);
-  color: #fca5a5;
-}
-.lost-copy p {
-  color: var(--text-dim);
-  max-width: 68ch;
-}
-.lost-coin {
-  width: 54px;
-  height: 54px;
-  display: grid;
-  place-items: center;
-  border-radius: 999px;
-  font-family: var(--font-mono);
-  font-weight: 900;
-  color: #7f1d1d;
-  background: radial-gradient(circle at 35% 28%, #fee2e2 0%, #fca5a5 42%, #b91c1c 100%);
-  box-shadow: inset 0 4px 10px rgba(255,255,255,.32), inset 0 -8px 16px rgba(0,0,0,.24), 0 8px 22px rgba(239,68,68,.2);
-}
-body.is-eliminated .create-card {
-  opacity: 0.72;
-}
-body.is-eliminated .choice-card,
-body.is-eliminated .prefix-input,
-body.is-eliminated #create-btn {
-  cursor: not-allowed;
-}
-body.is-eliminated .choice-card {
-  filter: grayscale(.35);
-}
-body.is-eliminated .topbar .balance-pill {
-  background: linear-gradient(140deg, #fecaca 0%, #ef4444 100%);
-  color: #450a0a;
-}
-
-/* Coin thickness: fake a real rim so the flip reads more like a physical coin. */
-.coin-inner::before {
-  content: "";
-  position: absolute;
-  inset: 3.5%;
-  border-radius: 50%;
-  transform: translateZ(-7px);
-  background:
-    repeating-conic-gradient(from 0deg, rgba(255,255,255,.24) 0deg 5deg, rgba(92,58,0,.28) 5deg 10deg),
-    radial-gradient(circle at 50% 50%, #e6a815 0%, #9b6506 74%);
-  box-shadow: 0 0 0 7px #9b6506, inset 0 0 18px rgba(0,0,0,.28);
-  backface-visibility: hidden;
-}
-.coin-face {
-  transform: translateZ(7px);
-}
-.coin-tails {
-  transform: rotateY(180deg) translateZ(7px);
-}
-.coin.coin-flipped-base .coin-inner {
-  transform: rotateY(180deg);
-}
-.coin-xl .coin-face {
-  border-width: clamp(4px, .9vh, 7px);
-}
-
-/* Keep the toss fully inside the modal and make it feel like one smooth throw + settle. */
-.flip-stage {
-  perspective: 1200px;
-  isolation: isolate;
-}
-.coin.is-waiting .coin-inner {
-  animation: coin-ready-3d 1550ms ease-in-out infinite;
-}
-@keyframes coin-ready-3d {
-  0%, 100% { transform: translate3d(0, 0, 0) rotateX(64deg) rotateY(-14deg) rotateZ(-5deg); }
-  50%      { transform: translate3d(0, -7px, 0) rotateX(66deg) rotateY(18deg) rotateZ(5deg); }
-}
-.coin.is-tossing .coin-inner {
-  animation: coin-flip-3d var(--toss-duration, 2600ms) cubic-bezier(.16,.78,.18,1) forwards;
-}
-@keyframes coin-flip-3d {
-  0%   { transform: translate3d(0, 0, 0) rotateX(66deg) rotateY(0deg) rotateZ(-4deg) scale(1); }
-  10%  { transform: translate3d(-6px, -18px, 0) rotateX(154deg) rotateY(360deg) rotateZ(5deg) scale(1.03); }
-  25%  { transform: translate3d(8px, -48px, 0) rotateX(314deg) rotateY(850deg) rotateZ(-6deg) scale(1.06); }
-  43%  { transform: translate3d(-6px, -62px, 0) rotateX(520deg) rotateY(1320deg) rotateZ(5deg) scale(1.05); }
-  62%  { transform: translate3d(5px, -38px, 0) rotateX(710deg) rotateY(1760deg) rotateZ(-3deg) scale(1.03); }
-  80%  { transform: translate3d(-2px, -10px, 0) rotateX(690deg) rotateY(calc(var(--final-y, 2160deg) - 92deg)) rotateZ(2deg) scale(1.01); }
-  91%  { transform: translate3d(0, 0, 0) rotateX(720deg) rotateY(var(--final-y, 2160deg)) rotateZ(0deg) scale(1.055, .945); }
-  96%  { transform: translate3d(0, -4px, 0) rotateX(720deg) rotateY(var(--final-y, 2160deg)) rotateZ(0deg) scale(.985, 1.025); }
-  100% { transform: translate3d(0, 0, 0) rotateX(720deg) rotateY(var(--final-y, 2160deg)) rotateZ(0deg) scale(1); }
-}
-.coin-xl.is-tossing .coin-shadow {
-  animation: coin-shadow-3d var(--toss-duration, 2600ms) cubic-bezier(.16,.78,.18,1) forwards;
-}
-@keyframes coin-shadow-3d {
-  0%, 100% { transform: translateX(-50%) scaleX(1); opacity: .42; }
-  28%      { transform: translateX(-50%) scaleX(.52); opacity: .18; }
-  48%      { transform: translateX(-50%) scaleX(.38); opacity: .14; }
-  82%      { transform: translateX(-50%) scaleX(.86); opacity: .32; }
-}
-
-@media (max-width: 720px) {
-  .lost-card {
-    grid-template-columns: auto 1fr;
-  }
-  .lost-card .btn {
-    grid-column: 1 / -1;
-    width: 100%;
-  }
-}
-@media (max-height: 680px) {
-  .lost-card { gap: 10px; padding: 12px; }
-  .lost-coin { width: 44px; height: 44px; font-size: 13px; }
-  .lost-copy h2 { font-size: 20px; }
-  .lost-copy p { font-size: 13px; }
-}
-
-/* =====================================================================
-   v1.0 live result + money color polish + rebuilt flip showcase
-   ===================================================================== */
-
-/* Balance pill now follows the player's balance tier. JS sets the vars. */
-.balance-pill {
-  background: linear-gradient(135deg,
-    color-mix(in srgb, var(--balance-bg, #fbbf24) 88%, #ffffff 12%) 0%,
-    color-mix(in srgb, var(--balance-bg, #d97706) 72%, #000000 28%) 100%);
-  color: var(--balance-fg, #261901);
-  box-shadow:
-    0 8px 24px -9px var(--balance-glow, rgba(251, 191, 36, 0.6)),
-    inset 0 1px 0 rgba(255,255,255,0.42),
-    inset 0 -1px 0 rgba(0,0,0,0.18);
-  border: 1px solid color-mix(in srgb, var(--balance-bg, #fbbf24) 70%, #ffffff 18%);
-}
-.balance-pill[data-balance-tone="b-white"] {
-  text-shadow: none;
-  border-color: rgba(255,255,255,0.72);
-}
-.balance-pill .balance-value { font-variant-numeric: tabular-nums; }
-
-/* Leaderboard: top players feel premium, and balances share the money palette. */
-.leaderboard-rows .lb-row {
-  isolation: isolate;
-}
-.leaderboard-rows .lb-row::before {
-  width: 4px;
-  opacity: .9;
-}
-.lb-row.is-top1 {
-  background:
-    radial-gradient(circle at 8% 50%, rgba(251,191,36,.24), transparent 38%),
-    linear-gradient(135deg, color-mix(in srgb, var(--bg-elev) 82%, #fbbf24 18%), var(--bg-elev));
-  border-color: rgba(251,191,36,.48);
-  box-shadow: var(--shadow-sm), 0 0 28px -18px #fbbf24;
-}
-.lb-row.is-top1::before { background: linear-gradient(180deg, #fff7ad, #f59e0b); }
-.lb-row.is-top2 {
-  background:
-    radial-gradient(circle at 8% 50%, rgba(226,232,240,.18), transparent 38%),
-    linear-gradient(135deg, color-mix(in srgb, var(--bg-elev) 86%, #e5e7eb 14%), var(--bg-elev));
-  border-color: rgba(203,213,225,.42);
-}
-.lb-row.is-top2::before { background: linear-gradient(180deg, #f8fafc, #94a3b8); }
-.lb-row.is-top3 {
-  background:
-    radial-gradient(circle at 8% 50%, rgba(217,119,6,.18), transparent 38%),
-    linear-gradient(135deg, color-mix(in srgb, var(--bg-elev) 86%, #d97706 14%), var(--bg-elev));
-  border-color: rgba(217,119,6,.44);
-}
-.lb-row.is-top3::before { background: linear-gradient(180deg, #fdba74, #92400e); }
-.lb-row.is-me {
-  outline: 1px solid rgba(139, 92, 246, .38);
-  background:
-    radial-gradient(circle at 14% 50%, rgba(139,92,246,.16), transparent 38%),
-    color-mix(in srgb, var(--bg-elev) 90%, var(--primary) 10%);
-}
-.lb-balance {
-  display: inline-flex;
-  align-items: center;
-  justify-content: flex-end;
-  min-width: 92px;
-  padding: 5px 10px;
-  border-radius: 999px;
-  color: var(--balance-fg, var(--gold));
-  background: linear-gradient(135deg,
-    color-mix(in srgb, var(--balance-bg, #fbbf24) 86%, #ffffff 14%),
-    color-mix(in srgb, var(--balance-bg, #d97706) 70%, #000000 30%));
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.28), 0 8px 18px -14px var(--balance-glow, rgba(251,191,36,.55));
-}
-.lb-balance[data-balance-tone="b-white"] {
-  color: #0f172a;
-  background: linear-gradient(135deg, #ffffff, #e2e8f0);
-}
-
-/* Coin texture fix: force every layer into a real circle and hide any square artifacts. */
-.coin,
-.coin-inner,
-.coin-face,
-.coin::after,
-.coin-inner::before {
-  border-radius: 50%;
-}
-.coin-face {
-  overflow: hidden;
-  clip-path: circle(50% at 50% 50%);
-}
-.coin::after {
-  clip-path: circle(50% at 50% 50%);
-}
-.coin-heads {
-  background:
-    radial-gradient(circle at 32% 24%, rgba(255,255,255,.82) 0 10%, transparent 11%),
-    radial-gradient(circle at 48% 48%, #ffe08a 0 36%, #f2aa12 58%, #9b6506 100%);
-}
-.coin-tails {
-  background:
-    radial-gradient(circle at 32% 24%, rgba(255,255,255,.90) 0 10%, transparent 11%),
-    radial-gradient(circle at 48% 48%, #f8fafc 0 34%, #cbd5e1 58%, #64748b 100%);
-}
-.coin-heads::before { border-color: rgba(92,58,0,.30); }
-.coin-tails::before { border-color: rgba(45,51,70,.30); }
-
-/* Bigger, cleaner flip presentation. */
-.modal {
-  max-width: 560px;
-}
-.flip-title {
-  font-size: clamp(19px, 2.6vw, 24px);
-}
-.flip-stage {
-  min-height: clamp(270px, 45vh, 380px);
-  overflow: visible;
-  perspective: 1500px;
-  border: 1px solid color-mix(in srgb, var(--primary) 20%, transparent);
-  background:
-    radial-gradient(circle at 50% 54%, color-mix(in srgb, var(--primary) 18%, transparent) 0%, transparent 48%),
-    radial-gradient(ellipse at 50% 84%, rgba(0,0,0,.28), transparent 44%);
-}
-.coin-xl {
-  width: clamp(190px, 30vw, 240px);
-  height: clamp(190px, 30vw, 240px);
-}
-.coin-xl .coin-face {
-  font-size: clamp(82px, 12vw, 106px);
-}
-.coin-xl .coin-shadow {
-  bottom: -34px;
-  width: 76%;
-  height: 22px;
-  filter: blur(6px);
-}
-
-/* A more readable flip: one high toss, fast edge spins, then squash/bounce settle. */
-.coin.is-waiting .coin-inner {
-  animation: coin-ready-showcase 1500ms ease-in-out infinite;
-}
-@keyframes coin-ready-showcase {
-  0%, 100% { transform: translate3d(0,0,0) rotateX(12deg) rotateY(-18deg) rotateZ(-2deg); }
-  50%      { transform: translate3d(0,-10px,0) rotateX(-10deg) rotateY(22deg) rotateZ(2deg); }
-}
-.coin.is-tossing .coin-inner {
-  animation: coin-flip-showcase var(--toss-duration, 2800ms) cubic-bezier(.15,.82,.18,1) forwards;
-}
-@keyframes coin-flip-showcase {
-  0%   { transform: translate3d(0, 0, 0) rotateX(0deg) rotateY(0deg) rotateZ(0deg) scale(1); }
-  8%   { transform: translate3d(-10px, -36px, 0) rotateX(260deg) rotateY(230deg) rotateZ(-8deg) scale(1.04); }
-  18%  { transform: translate3d(12px, -105px, 0) rotateX(720deg) rotateY(540deg) rotateZ(7deg) scale(1.08); }
-  32%  { transform: translate3d(-8px, -156px, 0) rotateX(1320deg) rotateY(870deg) rotateZ(-5deg) scale(1.10); }
-  48%  { transform: translate3d(10px, -132px, 0) rotateX(1980deg) rotateY(1210deg) rotateZ(5deg) scale(1.08); }
-  64%  { transform: translate3d(-6px, -76px, 0) rotateX(2640deg) rotateY(1580deg) rotateZ(-3deg) scale(1.05); }
-  80%  { transform: translate3d(3px, -20px, 0) rotateX(3240deg) rotateY(calc(var(--final-y, 2160deg) - 140deg)) rotateZ(1deg) scale(1.02); }
-  90%  { transform: translate3d(0, 0, 0) rotateX(3600deg) rotateY(var(--final-y, 2160deg)) rotateZ(0deg) scale(1.08, .90); }
-  95%  { transform: translate3d(0, -9px, 0) rotateX(3600deg) rotateY(var(--final-y, 2160deg)) rotateZ(0deg) scale(.97, 1.05); }
-  100% { transform: translate3d(0, 0, 0) rotateX(3600deg) rotateY(var(--final-y, 2160deg)) rotateZ(0deg) scale(1); }
-}
-.coin-xl.is-tossing .coin-shadow {
-  animation: coin-shadow-showcase var(--toss-duration, 2800ms) cubic-bezier(.15,.82,.18,1) forwards;
-}
-@keyframes coin-shadow-showcase {
-  0%, 100% { transform: translateX(-50%) scaleX(1); opacity: .42; }
-  18%      { transform: translateX(-50%) scaleX(.52); opacity: .20; }
-  34%      { transform: translateX(-50%) scaleX(.30); opacity: .12; }
-  62%      { transform: translateX(-50%) scaleX(.56); opacity: .22; }
-  88%      { transform: translateX(-50%) scaleX(.92); opacity: .36; }
-}
-
-@media (max-width: 720px) {
-  .modal { max-width: min(100%, 520px); }
-  .flip-stage { min-height: clamp(250px, 42vh, 330px); }
-  .coin-xl { width: clamp(170px, 58vw, 220px); height: clamp(170px, 58vw, 220px); }
-  .coin-xl .coin-face { font-size: clamp(72px, 25vw, 96px); }
-  .lb-balance { min-width: 78px; padding-inline: 8px; }
-}
-@media (max-height: 680px) {
-  .flip-stage { min-height: 230px; }
-  .coin-xl { width: 166px; height: 166px; }
-  .coin-xl .coin-face { font-size: 72px; }
-}
-
-/* =====================================================================
-   v0.10 requested fixes: clean balance, no wager hint, required choice,
-   stronger creator result popup, and rebuilt premium 3D flip.
-   ===================================================================== */
-
-/* Topbar balance: show money only, no BALANCE label. */
-.balance-pill {
-  gap: 0;
-  padding: 7px 13px;
-  min-width: 76px;
-  justify-content: center;
-  font-size: 15px;
-  letter-spacing: -0.01em;
-}
-.balance-pill .balance-label {
-  display: none !important;
-}
-.balance-pill .balance-value {
-  line-height: 1;
-  font-weight: 850;
-}
-
-/* WAGER area: leave only the input field and Create game button visible. */
-.wager-field {
-  margin-bottom: 0;
-}
-.wager-field .field-hint,
-#wager-hint {
-  display: none !important;
-}
-.create-form {
-  display: grid !important;
-  gap: 14px;
-}
-.choice-row {
-  margin-bottom: 0;
-}
-.choice-card {
-  min-height: 72px;
-  display: flex;
-  align-items: center;
-  border-color: color-mix(in srgb, var(--line) 84%, transparent);
-}
-.choice-card:hover {
-  transform: translateY(-1px);
-  border-color: color-mix(in srgb, var(--primary) 44%, var(--line-2));
-}
-.choice-card:has(input:focus-visible) {
-  outline: 3px solid rgba(139, 92, 246, 0.22);
-  outline-offset: 2px;
-}
-.choice-card:has(input:checked) {
-  border-color: color-mix(in srgb, var(--primary) 72%, #ffffff 8%);
-  background:
-    radial-gradient(circle at 20% 50%, color-mix(in srgb, var(--primary) 18%, transparent), transparent 46%),
-    color-mix(in srgb, var(--bg-elev-2) 88%, var(--primary) 12%);
-  box-shadow: var(--shadow-sm), 0 0 0 1px rgba(139, 92, 246, 0.36);
-}
-.choice-card:not(:has(input:checked)) .choice-content {
-  opacity: 0.86;
-}
-.prefix-input input::placeholder {
-  color: color-mix(in srgb, var(--text-mute) 86%, transparent);
-}
-
-/* Result banner behaves like a real popup for the creator when a game completes. */
-.result-banner {
-  top: calc(env(safe-area-inset-top, 0px) + 16px);
-  width: min(600px, calc(100vw - 24px));
-  padding: 15px 15px 15px 16px;
-  border-radius: 20px;
-  backdrop-filter: blur(18px) saturate(1.08);
-  -webkit-backdrop-filter: blur(18px) saturate(1.08);
-  box-shadow: 0 24px 70px -24px rgba(0,0,0,.72), 0 8px 24px -16px rgba(0,0,0,.45);
-}
-.result-banner-title {
-  font-size: 16px;
-  line-height: 1.25;
-}
-.result-banner-sub {
-  line-height: 1.35;
-}
-.result-banner.is-win .result-banner-coin {
-  background: radial-gradient(circle at 34% 26%, #fff7c2 0 10%, #fbbf24 42%, #16a34a 100%);
-}
-.result-banner.is-loss .result-banner-coin {
-  background: radial-gradient(circle at 34% 26%, #fee2e2 0 10%, #fb7185 44%, #991b1b 100%);
-}
-
-/* Premium coin model: thicker rim, no visible gap between faces, smoother motion. */
-.coin {
-  --coin-depth: 5px;
-  --coin-rim: #b77908;
-  --coin-rim-dark: #754d08;
-  perspective: 1600px;
-  overflow: visible;
-  contain: none;
-}
-.coin-xs { --coin-depth: 2px; }
-.coin-sm { --coin-depth: 3px; }
-.coin-md { --coin-depth: 5px; }
-.coin-xl { --coin-depth: 11px; }
-.coin-inner {
-  position: relative;
-  width: 100%;
-  height: 100%;
-  transform-style: preserve-3d;
-  transform-origin: 50% 50%;
-  will-change: transform;
-  transition: transform 260ms ease;
-  filter: drop-shadow(0 14px 24px rgba(0,0,0,.22));
-}
-.coin-inner::before {
-  content: "";
-  position: absolute;
-  inset: 4.5%;
-  border-radius: 50%;
-  transform: translateZ(calc(var(--coin-depth) * -1));
-  background:
-    repeating-conic-gradient(from -8deg,
-      rgba(255,255,255,.28) 0deg 5deg,
-      rgba(117,77,8,.34) 5deg 10deg),
-    radial-gradient(circle at 50% 50%, #f2b82e 0 48%, var(--coin-rim) 72%, var(--coin-rim-dark) 100%);
-  box-shadow:
-    0 0 0 var(--coin-depth) var(--coin-rim),
-    inset 0 0 18px rgba(0,0,0,.26),
-    inset 0 0 0 2px rgba(255,255,255,.12);
-  backface-visibility: hidden;
-  -webkit-backface-visibility: hidden;
-  pointer-events: none;
-}
-.coin::after {
-  display: none;
-}
-.coin-face {
-  position: absolute;
-  inset: 0;
-  border-radius: 50%;
-  overflow: hidden;
-  clip-path: circle(50% at 50% 50%);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transform: translateZ(var(--coin-depth));
-  backface-visibility: hidden;
-  -webkit-backface-visibility: hidden;
-  border: max(2px, calc(var(--coin-depth) * .62)) solid rgba(255,255,255,.17);
-  box-shadow:
-    inset 0 12px 20px rgba(255,255,255,.20),
-    inset 0 -16px 24px rgba(0,0,0,.30),
-    inset 0 0 0 2px rgba(255,255,255,.10);
-}
-.coin-tails {
-  transform: rotateY(180deg) translateZ(var(--coin-depth));
-}
-.coin-heads {
-  color: #5a3500;
-  background:
-    radial-gradient(circle at 30% 22%, rgba(255,255,255,.92) 0 9%, transparent 10%),
-    radial-gradient(circle at 48% 46%, #ffe695 0 34%, #f7b91f 55%, #a96707 100%);
-}
-.coin-tails {
-  color: #243044;
-  background:
-    radial-gradient(circle at 30% 22%, rgba(255,255,255,.95) 0 9%, transparent 10%),
-    radial-gradient(circle at 48% 46%, #ffffff 0 32%, #d8dee9 55%, #64748b 100%);
-}
-.coin-face::before {
-  inset: 14%;
-  border-width: max(1px, calc(var(--coin-depth) * .22));
-  opacity: .8;
-}
-.coin-face::after {
-  inset: 28%;
-  opacity: .8;
-}
-.coin-face span {
-  position: relative;
-  z-index: 2;
-  transform: translateZ(calc(var(--coin-depth) + 1px));
-  text-shadow: 0 2px 0 rgba(255,255,255,.24), 0 -1px 0 rgba(0,0,0,.18);
-}
-.coin-flipped-base .coin-inner,
-.coin.coin-flipped-base .coin-inner {
-  transform: rotateY(180deg);
-}
-
-.modal {
-  max-width: 560px;
-}
-.flip-stage {
-  min-height: clamp(280px, 45vh, 380px);
-  display: grid;
-  place-items: center;
-  overflow: hidden;
-  perspective: 1700px;
-  isolation: isolate;
-  border: 1px solid color-mix(in srgb, var(--primary) 20%, transparent);
-  background:
-    radial-gradient(circle at 50% 52%, color-mix(in srgb, var(--primary) 15%, transparent) 0%, transparent 48%),
-    radial-gradient(ellipse at 50% 84%, rgba(0,0,0,.34), transparent 46%);
-}
-.coin-xl {
-  width: clamp(184px, 30vw, 232px);
-  height: clamp(184px, 30vw, 232px);
-}
-.coin-xl .coin-face {
-  font-size: clamp(78px, 11vw, 102px);
-}
-.coin-xl .coin-shadow {
-  bottom: -30px;
-  width: 72%;
-  height: 22px;
-  filter: blur(7px);
-  opacity: .46;
-  will-change: transform, opacity;
-}
-.coin.is-waiting .coin-inner {
-  animation: coin-ready-premium 1800ms ease-in-out infinite;
-}
-@keyframes coin-ready-premium {
-  0%, 100% { transform: translate3d(0,0,0) rotateX(10deg) rotateY(-18deg) rotateZ(-2deg); }
-  50%      { transform: translate3d(0,-9px,0) rotateX(-8deg) rotateY(20deg) rotateZ(2deg); }
-}
-.coin.is-tossing .coin-inner {
-  animation: coin-flip-premium var(--toss-duration, 4200ms) cubic-bezier(.17,.78,.16,1) forwards;
-}
-@keyframes coin-flip-premium {
-  0%   { transform: translate3d(0, 0, 0) rotateX(10deg) rotateY(0deg) rotateZ(0deg) scale(1); }
-  10%  { transform: translate3d(-8px, -30px, 0) rotateX(240deg) rotateY(420deg) rotateZ(-5deg) scale(1.035); }
-  24%  { transform: translate3d(10px, -78px, 0) rotateX(620deg) rotateY(980deg) rotateZ(5deg) scale(1.065); }
-  42%  { transform: translate3d(-7px, -102px, 0) rotateX(1040deg) rotateY(1540deg) rotateZ(-4deg) scale(1.075); }
-  60%  { transform: translate3d(7px, -78px, 0) rotateX(1420deg) rotateY(2050deg) rotateZ(3deg) scale(1.055); }
-  76%  { transform: translate3d(-3px, -30px, 0) rotateX(1700deg) rotateY(calc(var(--final-y, 2880deg) - 230deg)) rotateZ(-1deg) scale(1.025); }
-  88%  { transform: translate3d(0, 0, 0) rotateX(1800deg) rotateY(calc(var(--final-y, 2880deg) - 18deg)) rotateZ(0deg) scale(1.055, .94); }
-  94%  { transform: translate3d(0, -8px, 0) rotateX(1800deg) rotateY(calc(var(--final-y, 2880deg) + 7deg)) rotateZ(0deg) scale(.985, 1.035); }
-  100% { transform: translate3d(0, 0, 0) rotateX(1800deg) rotateY(var(--final-y, 2880deg)) rotateZ(0deg) scale(1); }
-}
-.coin-xl.is-tossing .coin-shadow {
-  animation: coin-shadow-premium var(--toss-duration, 4200ms) cubic-bezier(.17,.78,.16,1) forwards;
-}
-@keyframes coin-shadow-premium {
-  0%, 100% { transform: translateX(-50%) scaleX(1); opacity: .44; }
-  24%      { transform: translateX(-50%) scaleX(.58); opacity: .22; }
-  42%      { transform: translateX(-50%) scaleX(.34); opacity: .13; }
-  70%      { transform: translateX(-50%) scaleX(.70); opacity: .27; }
-  88%      { transform: translateX(-50%) scaleX(.92); opacity: .38; }
-}
-
-@media (max-width: 720px) {
-  .topbar-right { gap: 8px; }
-  .balance-pill { min-width: 68px; padding-inline: 11px; }
-  .modal { max-width: min(100%, 520px); }
-  .flip-stage { min-height: clamp(250px, 42vh, 330px); }
-  .coin-xl { width: clamp(160px, 54vw, 210px); height: clamp(160px, 54vw, 210px); }
-  .coin-xl .coin-face { font-size: clamp(68px, 23vw, 92px); }
-}
-@media (max-height: 680px) {
-  .flip-stage { min-height: 232px; }
-  .coin-xl { width: 162px; height: 162px; }
-  .coin-xl .coin-face { font-size: 70px; }
-}
-@media (prefers-reduced-motion: reduce) {
-  .coin.is-waiting .coin-inner,
-  .coin.is-tossing .coin-inner,
-  .coin-xl.is-tossing .coin-shadow {
-    animation: none !important;
-  }
-  .coin.is-tossing .coin-inner {
-    transform: rotateY(var(--final-y, 2880deg));
-    transition: transform 700ms ease-out;
-  }
-}
-
-/* =====================================================================
-   v0.11 fixes: reliable creator notifications, simpler coin toss,
-   restored tails face, cleaner fonts, centered leaderboard money.
-   ===================================================================== */
-:root {
-  --font: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-}
-body {
-  letter-spacing: -0.006em;
-}
-.card-title,
-.auth-title,
-.brand-text,
-.field-label,
-.tab,
-.btn {
-  letter-spacing: -0.018em;
-}
-
-/* Force the coin letters so Tails can never inherit/show H. */
-.coin-heads > span,
-.coin-tails > span {
-  font-size: 0;
-  line-height: 1;
-}
-.coin-heads > span::before,
-.coin-tails > span::before {
-  font-size: inherit;
-  font-weight: 950;
-  letter-spacing: -0.08em;
-}
-.coin-heads > span::before { content: "H"; }
-.coin-tails > span::before { content: "T"; }
-.coin-tails {
-  color: #1f2937;
-  background:
-    radial-gradient(circle at 30% 22%, rgba(255,255,255,.95) 0 9%, transparent 10%),
-    radial-gradient(circle at 50% 48%, #ffffff 0 30%, #d7dde8 52%, #7b8798 100%);
-}
-.coin-tails::before { border-color: rgba(31,41,55,.30); }
-.coin-tails::after { background: rgba(255,255,255,.14); }
-.coin-flipped-base .coin-inner,
-.coin.coin-flipped-base .coin-inner {
-  transform: rotateY(180deg) !important;
-}
-
-/* Simple coin toss: one arc, fewer rotations, calmer landing. */
-.flip-stage {
-  min-height: clamp(235px, 38vh, 320px);
-  overflow: hidden;
-  background:
-    radial-gradient(circle at 50% 48%, color-mix(in srgb, var(--primary) 10%, transparent) 0%, transparent 46%),
-    radial-gradient(ellipse at 50% 82%, rgba(0,0,0,.24), transparent 46%);
-}
-.coin-xl {
-  width: clamp(160px, 25vw, 204px);
-  height: clamp(160px, 25vw, 204px);
-}
-.coin-xl .coin-face { font-size: clamp(68px, 10vw, 90px); }
-.coin.is-waiting .coin-inner {
-  animation: coin-ready-simple 1800ms ease-in-out infinite !important;
-}
-@keyframes coin-ready-simple {
-  0%, 100% { transform: translate3d(0,0,0) rotateX(8deg) rotateY(-12deg) rotateZ(0deg); }
-  50%      { transform: translate3d(0,-7px,0) rotateX(0deg) rotateY(14deg) rotateZ(0deg); }
-}
-.coin.is-tossing .coin-inner {
-  animation: coin-flip-simple var(--toss-duration, 4200ms) cubic-bezier(.2,.72,.18,1) forwards !important;
-}
-@keyframes coin-flip-simple {
-  0%   { transform: translate3d(0,0,0) rotateX(8deg) rotateY(0deg) scale(1); }
-  18%  { transform: translate3d(0,-54px,0) rotateX(190deg) rotateY(360deg) scale(1.025); }
-  38%  { transform: translate3d(0,-96px,0) rotateX(360deg) rotateY(760deg) scale(1.045); }
-  60%  { transform: translate3d(0,-78px,0) rotateX(520deg) rotateY(1080deg) scale(1.035); }
-  82%  { transform: translate3d(0,-18px,0) rotateX(690deg) rotateY(calc(var(--final-y, 1440deg) - 70deg)) scale(1.01); }
-  94%  { transform: translate3d(0,0,0) rotateX(720deg) rotateY(calc(var(--final-y, 1440deg) + 4deg)) scale(1.025, .965); }
-  100% { transform: translate3d(0,0,0) rotateX(720deg) rotateY(var(--final-y, 1440deg)) scale(1); }
-}
-.coin-xl.is-tossing .coin-shadow {
-  animation: coin-shadow-simple var(--toss-duration, 4200ms) cubic-bezier(.2,.72,.18,1) forwards !important;
-}
-@keyframes coin-shadow-simple {
-  0%, 100% { transform: translateX(-50%) scaleX(1); opacity: .40; }
-  38%      { transform: translateX(-50%) scaleX(.46); opacity: .16; }
-  70%      { transform: translateX(-50%) scaleX(.68); opacity: .26; }
-  92%      { transform: translateX(-50%) scaleX(.94); opacity: .36; }
-}
-
-/* Leaderboard money pills: center the balance inside the rounded box. */
-.leaderboard-rows .lb-row {
-  align-items: center;
-}
-.lb-name {
-  font-weight: 750;
-}
-.lb-rank {
-  font-variant-numeric: tabular-nums;
-}
-.lb-balance {
-  justify-content: center !important;
-  text-align: center !important;
-  min-width: 104px;
-  padding: 6px 12px;
-  font-weight: 900;
-  font-variant-numeric: tabular-nums;
-  letter-spacing: -0.025em;
-}
-.game-row-wager,
-.my-row-amount {
-  font-variant-numeric: tabular-nums;
-}
-@media (max-width: 720px) {
-  .flip-stage { min-height: clamp(220px, 36vh, 290px); }
-  .coin-xl { width: clamp(142px, 46vw, 184px); height: clamp(142px, 46vw, 184px); }
-  .coin-xl .coin-face { font-size: clamp(60px, 20vw, 80px); }
-  .lb-balance { min-width: 94px; }
-}
-
-/* Correct the forced coin letters without shrinking them. */
-.coin-heads > span,
-.coin-tails > span {
-  position: relative;
-  display: inline-block;
-  width: 1em;
-  height: 1em;
-  font-size: 1em;
-  color: transparent !important;
-}
-.coin-heads > span::before,
-.coin-tails > span::before {
-  position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  font-size: 1em;
-  font-weight: 950;
-  line-height: 1;
-  color: currentColor;
-}
-.coin-heads > span::before { color: #5a3500; }
-.coin-tails > span::before { color: #1f2937; }
-
-/* =====================================================================
-   v1.0 additions — SVG icon buttons in topbar, confirm modal,
-   avatar letters, toast notifications.
-   ===================================================================== */
-
-/* Icon buttons live inside the topbar now. */
-.icon-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
-  padding: 0;
-  border-radius: 999px;
-  border: 1px solid var(--line-2);
-  background: color-mix(in srgb, var(--bg-elev-2) 70%, transparent);
-  color: var(--text);
-  box-shadow: var(--shadow-sm);
-  cursor: pointer;
-  transition: transform 120ms ease, background 150ms ease, border-color 150ms ease, color 150ms ease;
-}
-.icon-btn:hover {
-  transform: translateY(-1px);
-  border-color: var(--primary);
-  color: var(--primary-hi);
-}
-.icon-btn:focus-visible {
-  outline: 2px solid var(--primary);
-  outline-offset: 2px;
-}
-.icon-btn.is-muted {
-  color: var(--text-mute);
-  border-color: var(--line);
-}
-
-/* Float a single theme toggle on the auth screen since there's no topbar. */
-.floating-toggle {
-  position: fixed;
-  right: 14px;
-  top: max(14px, env(safe-area-inset-top, 0px));
-  z-index: 90;
-  width: 42px;
-  height: 42px;
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-}
-
-/* Old fixed-bottom-right floating toggle — hide it. The topbar owns it now. */
-body[data-view="dashboard"] .floating-toggle { display: none !important; }
-
-/* Avatar letter blob in the lobby rows. */
-.avatar.avatar-letter {
-  display: grid;
-  place-items: center;
-  font-weight: 800;
-  font-size: 14px;
-  color: #fff;
-  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-deep) 100%);
-  text-transform: uppercase;
-}
-
-/* Confirm modal styling. */
-.modal.modal-sm { max-width: 420px; }
-.confirm-body {
-  margin: 8px 0 16px;
-  color: var(--text-dim);
-  line-height: 1.5;
-}
-.confirm-actions {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-}
-@media (max-width: 480px) {
-  .confirm-actions { grid-template-columns: 1fr; }
-  .confirm-actions .btn { width: 100%; }
-}
-
-/* Hide native theme toggle if we still have one floating */
-body[data-view="dashboard"] .theme-toggle:not(.icon-btn) { display: none !important; }
-/* =====================================================================
-   v0.12 GLOBAL COIN BUG FIX
-   ---------------------------------------------------------------------
-   Static UI coins and the animated flip coin are now completely separated.
-   Nothing in the old .coin/.coin-inner/.coin-face stack can affect these.
-   This fixes the white/silver halo and the radial/overlapped texture in:
-   - create-game heads/tails picker
-   - open-games rows
-   - result banner
-   - auth/logo decoration
-   - flip animation modal
-   ===================================================================== */
-.static-coin {
-  --static-coin-size: 48px;
-  width: var(--static-coin-size) !important;
-  height: var(--static-coin-size) !important;
-  min-width: var(--static-coin-size) !important;
-  border-radius: 999px !important;
-  position: relative !important;
-  display: inline-grid !important;
-  place-items: center !important;
-  isolation: isolate !important;
-  overflow: hidden !important;
-  box-sizing: border-box !important;
-  flex: 0 0 auto !important;
-  font-weight: 900 !important;
-  font-size: calc(var(--static-coin-size) * .46) !important;
-  line-height: 1 !important;
-  letter-spacing: -.05em !important;
-  transform: none;
-  filter: drop-shadow(0 7px 12px rgba(0,0,0,.28));
-}
-.static-coin::before,
-.static-coin::after {
-  content: "" !important;
-  position: absolute !important;
-  border-radius: 999px !important;
-  pointer-events: none !important;
-  z-index: 1 !important;
-}
-.static-coin::before {
-  inset: 14% !important;
-  border: max(1px, calc(var(--static-coin-size) * .04)) solid currentColor !important;
-  opacity: .28 !important;
-}
-.static-coin::after {
-  inset: 28% !important;
-  border: 1px solid rgba(255,255,255,.38) !important;
-  box-shadow: inset 0 3px 8px rgba(255,255,255,.18), inset 0 -4px 9px rgba(0,0,0,.16) !important;
-  opacity: .72 !important;
-}
-.static-coin > span {
-  position: relative !important;
-  z-index: 2 !important;
-  width: 1.28em !important;
-  height: 1.28em !important;
-  border-radius: 999px !important;
-  display: grid !important;
-  place-items: center !important;
-  text-shadow: 0 2px 0 rgba(255,255,255,.25), 0 -1px 0 rgba(0,0,0,.22) !important;
-}
-.static-coin-heads {
-  color: #6b4200 !important;
-  border: max(2px, calc(var(--static-coin-size) * .065)) solid #d49313 !important;
-  background:
-    radial-gradient(circle at 30% 22%, rgba(255,255,255,.92) 0 8%, transparent 9%),
-    radial-gradient(circle at 50% 48%, #fff0b6 0 30%, #f7bd26 54%, #b87309 76%, #704500 100%) !important;
-  box-shadow:
-    inset 0 10px 14px rgba(255,255,255,.32),
-    inset 0 -12px 18px rgba(76,42,0,.34),
-    0 0 0 1px rgba(255,211,87,.22) !important;
-}
-.static-coin-heads > span {
-  background: rgba(255,227,137,.34) !important;
-  border: 1px solid rgba(107,66,0,.25) !important;
-}
-.static-coin-tails {
-  color: #273244 !important;
-  border: max(2px, calc(var(--static-coin-size) * .065)) solid #9aa8ba !important;
-  background:
-    radial-gradient(circle at 30% 22%, rgba(255,255,255,1) 0 8%, transparent 9%),
-    radial-gradient(circle at 50% 48%, #ffffff 0 29%, #e5eaf1 53%, #a8b3c1 76%, #596777 100%) !important;
-  box-shadow:
-    inset 0 10px 14px rgba(255,255,255,.46),
-    inset 0 -12px 18px rgba(15,23,42,.24),
-    0 0 0 1px rgba(226,232,240,.25) !important;
-}
-.static-coin-tails > span {
-  background: rgba(255,255,255,.36) !important;
-  border: 1px solid rgba(39,50,68,.20) !important;
-}
-.static-coin-xs { --static-coin-size: 26px; font-size: 13px !important; }
-.static-coin-sm { --static-coin-size: 42px; }
-.static-coin-md { --static-coin-size: 84px; }
-.static-coin-choice { --static-coin-size: 48px; }
-.choice-card:hover .static-coin-choice,
-.choice-card:has(input:checked) .static-coin-choice {
-  transform: translateY(-1px) scale(1.03) !important;
-}
-.result-banner-coin.static-coin {
-  background-image: inherit;
-}
-.result-banner.is-win .result-banner-coin.static-coin,
-.result-banner.is-loss .result-banner-coin.static-coin {
-  background-image: inherit !important;
-}
-@media (max-width: 720px) {
-  .static-coin-choice { --static-coin-size: 42px; }
-  .static-coin-md { --static-coin-size: 58px; }
-}
-
-/* New isolated flip modal coin. It intentionally does not use .coin. */
-.flip-coin {
-  --flip-size: clamp(160px, 54vw, 210px);
-  --flip-depth: clamp(7px, 2.4vw, 14px);
-  --final-y: 2880deg;
-  --toss-duration: 2800ms;
-  width: var(--flip-size) !important;
-  height: var(--flip-size) !important;
-  position: relative !important;
-  margin: 0 auto !important;
-  perspective: 1600px !important;
-  transform-style: preserve-3d !important;
-  overflow: visible !important;
-}
-.flip-coin-inner {
-  position: absolute !important;
-  inset: 0 !important;
-  border-radius: 50% !important;
-  transform-style: preserve-3d !important;
-  transform-origin: center center !important;
-  will-change: transform !important;
-}
-.flip-coin-inner::before {
-  content: "" !important;
-  position: absolute !important;
-  inset: 2.5% !important;
-  border-radius: 50% !important;
-  transform: translateZ(calc(var(--flip-depth) * -1)) !important;
-  background:
-    repeating-conic-gradient(from -10deg, rgba(255,255,255,.35) 0deg 4deg, rgba(148,163,184,.34) 4deg 8deg, rgba(71,85,105,.32) 8deg 12deg),
-    radial-gradient(circle at 38% 30%, #f8fafc 0 18%, #cbd5e1 48%, #475569 100%) !important;
-  box-shadow:
-    0 0 0 var(--flip-depth) #cbd5e1,
-    inset 0 0 22px rgba(15,23,42,.28),
-    inset 0 0 0 2px rgba(255,255,255,.18) !important;
-  backface-visibility: visible !important;
-  pointer-events: none !important;
-}
-.flip-face {
-  position: absolute !important;
-  inset: 0 !important;
-  border-radius: 50% !important;
-  display: grid !important;
-  place-items: center !important;
-  overflow: hidden !important;
-  clip-path: circle(49.8% at 50% 50%) !important;
-  font-weight: 900 !important;
-  font-size: clamp(68px, 23vw, 92px) !important;
-  line-height: 1 !important;
-  letter-spacing: -.06em !important;
-  border: max(3px, calc(var(--flip-depth) * .62)) solid rgba(255,255,255,.18) !important;
-  box-shadow: inset 0 16px 28px rgba(255,255,255,.28), inset 0 -22px 30px rgba(15,23,42,.24) !important;
-  backface-visibility: hidden !important;
-  -webkit-backface-visibility: hidden !important;
-}
-.flip-face::before,
-.flip-face::after {
-  content: "" !important;
-  position: absolute !important;
-  border-radius: 50% !important;
-  pointer-events: none !important;
-}
-.flip-face::before {
-  inset: 15% !important;
-  border: max(2px, calc(var(--flip-depth) * .30)) solid currentColor !important;
-  opacity: .28 !important;
-}
-.flip-face::after {
-  inset: 29% !important;
-  border: 2px solid rgba(255,255,255,.30) !important;
-  box-shadow: inset 0 8px 18px rgba(255,255,255,.18), inset 0 -10px 20px rgba(0,0,0,.16) !important;
-  opacity: .78 !important;
-}
-.flip-face > span {
-  position: relative !important;
-  z-index: 2 !important;
-  width: 1.25em !important;
-  height: 1.25em !important;
-  border-radius: 50% !important;
-  display: grid !important;
-  place-items: center !important;
-}
-.flip-face-heads {
-  transform: translateZ(var(--flip-depth)) !important;
-  color: #6b4200 !important;
-  background:
-    radial-gradient(circle at 30% 22%, rgba(255,255,255,.92) 0 8%, transparent 9%),
-    radial-gradient(circle at 50% 48%, #fff0b6 0 30%, #f7bd26 54%, #b87309 76%, #704500 100%) !important;
-}
-.flip-face-heads > span {
-  background: rgba(255,227,137,.34) !important;
-  border: 1px solid rgba(107,66,0,.25) !important;
-  text-shadow: 0 3px 0 rgba(255,255,255,.28), 0 -2px 0 rgba(58,32,0,.25) !important;
-}
-.flip-face-tails {
-  transform: rotateY(180deg) translateZ(var(--flip-depth)) !important;
-  color: #273244 !important;
-  background:
-    radial-gradient(circle at 30% 22%, rgba(255,255,255,1) 0 8%, transparent 9%),
-    radial-gradient(circle at 50% 48%, #ffffff 0 29%, #e5eaf1 53%, #a8b3c1 76%, #596777 100%) !important;
-}
-.flip-face-tails > span {
-  background: rgba(255,255,255,.36) !important;
-  border: 1px solid rgba(39,50,68,.20) !important;
-  text-shadow: 0 3px 0 rgba(255,255,255,.62), 0 -2px 0 rgba(15,23,42,.18) !important;
-}
-.flip-coin-shadow {
-  position: absolute !important;
-  left: 50% !important;
-  bottom: -18px !important;
-  width: 68% !important;
-  height: 18px !important;
-  border-radius: 50% !important;
-  transform: translateX(-50%) !important;
-  background: radial-gradient(ellipse at center, rgba(0,0,0,.42) 0%, rgba(0,0,0,.10) 62%, transparent 72%) !important;
-  filter: blur(2px) !important;
-  pointer-events: none !important;
-}
-.flip-coin.is-waiting .flip-coin-inner {
-  animation: flip-ready-isolated 1350ms ease-in-out infinite !important;
-}
-@keyframes flip-ready-isolated {
-  0%, 100% { transform: translate3d(0,0,0) rotateX(5deg) rotateY(-16deg) rotateZ(-1deg); }
-  50%      { transform: translate3d(0,-7px,0) rotateX(-5deg) rotateY(16deg) rotateZ(1deg); }
-}
-.flip-coin.is-tossing .flip-coin-inner {
-  animation: flip-toss-isolated var(--toss-duration, 2800ms) cubic-bezier(.18,.76,.18,1) forwards !important;
-}
-@keyframes flip-toss-isolated {
-  0%   { transform: translate3d(0, 0, 0) rotateX(0deg) rotateY(0deg) rotateZ(0deg) scale(1); }
-  12%  { transform: translate3d(-5px, -28px, 0) rotateX(10deg) rotateY(430deg) rotateZ(-4deg) scale(1.03); }
-  28%  { transform: translate3d(7px, -80px, 0) rotateX(-8deg) rotateY(980deg) rotateZ(4deg) scale(1.06); }
-  46%  { transform: translate3d(-5px, -108px, 0) rotateX(7deg) rotateY(1560deg) rotateZ(-3deg) scale(1.07); }
-  64%  { transform: translate3d(5px, -72px, 0) rotateX(-5deg) rotateY(2140deg) rotateZ(2deg) scale(1.04); }
-  80%  { transform: translate3d(-2px, -22px, 0) rotateX(3deg) rotateY(calc(var(--final-y, 2880deg) - 118deg)) rotateZ(-1deg) scale(1.02); }
-  90%  { transform: translate3d(0, 0, 0) rotateX(0deg) rotateY(calc(var(--final-y, 2880deg) + 12deg)) rotateZ(0deg) scale(1.055, .93); }
-  96%  { transform: translate3d(0, -6px, 0) rotateX(0deg) rotateY(calc(var(--final-y, 2880deg) - 5deg)) rotateZ(0deg) scale(.985, 1.025); }
-  100% { transform: translate3d(0, 0, 0) rotateX(0deg) rotateY(var(--final-y, 2880deg)) rotateZ(0deg) scale(1); }
-}
-.flip-coin.is-tossing .flip-coin-shadow {
-  animation: flip-shadow-isolated var(--toss-duration, 2800ms) cubic-bezier(.18,.76,.18,1) forwards !important;
-}
-@keyframes flip-shadow-isolated {
-  0%, 100% { transform: translateX(-50%) scaleX(1); opacity: .42; }
-  28%      { transform: translateX(-50%) scaleX(.48); opacity: .20; }
-  46%      { transform: translateX(-50%) scaleX(.30); opacity: .12; }
-  76%      { transform: translateX(-50%) scaleX(.72); opacity: .30; }
-  90%      { transform: translateX(-50%) scaleX(.95); opacity: .38; }
-}
-@media (max-height: 740px) {
-  .flip-coin { --flip-size: 162px; }
-  .flip-face { font-size: 70px !important; }
-}
-@media (prefers-reduced-motion: reduce) {
-  .flip-coin.is-waiting .flip-coin-inner,
-  .flip-coin.is-tossing .flip-coin-inner,
-  .flip-coin.is-tossing .flip-coin-shadow {
-    animation: none !important;
-  }
-  .flip-coin.is-tossing .flip-coin-inner {
-    transform: rotateY(var(--final-y, 2880deg)) !important;
-    transition: transform 520ms ease-out !important;
-  }
-}
-
-/* Ensure result-banner win/loss color rules never repaint the side coin. */
-.result-banner .result-banner-coin.static-coin-heads {
-  background:
-    radial-gradient(circle at 30% 22%, rgba(255,255,255,.92) 0 8%, transparent 9%),
-    radial-gradient(circle at 50% 48%, #fff0b6 0 30%, #f7bd26 54%, #b87309 76%, #704500 100%) !important;
-}
-.result-banner .result-banner-coin.static-coin-tails {
-  background:
-    radial-gradient(circle at 30% 22%, rgba(255,255,255,1) 0 8%, transparent 9%),
-    radial-gradient(circle at 50% 48%, #ffffff 0 29%, #e5eaf1 53%, #a8b3c1 76%, #596777 100%) !important;
-}
-
-/* =====================================================================
-   v0.13 PHYSICAL VERTICAL FLIP
-   ---------------------------------------------------------------------
-   Fixes the modal toss only:
-   - vertical flip on the X axis, no diagonal corkscrew
-   - 1.5s motion
-   - front/back faces are connected by a visible middle rim so there is no
-     see-through gap when the coin is edge-on
-   ===================================================================== */
-.flip-coin {
-  --flip-size: clamp(160px, 52vw, 210px) !important;
-  --flip-depth: clamp(12px, 4vw, 20px) !important;
-  --final-x: 2160deg;
-  perspective: 1800px !important;
-}
-.flip-coin-inner {
-  transform-style: preserve-3d !important;
-}
-
-/* Solid center slab: it sits between the two faces and becomes the edge
-   when the coin turns sideways, preventing the transparent see-through line. */
-.flip-coin-inner::before {
-  inset: 0 !important;
-  transform: translateZ(0) !important;
-  border-radius: 50% !important;
-  background:
-    radial-gradient(circle at 50% 50%, #f8fafc 0 56%, #cbd5e1 64%, #64748b 83%, #334155 100%) !important;
-  box-shadow:
-    0 0 0 calc(var(--flip-depth) * .72) #94a3b8,
-    0 0 0 var(--flip-depth) #475569,
-    inset 0 0 26px rgba(15,23,42,.35) !important;
-  backface-visibility: visible !important;
-  -webkit-backface-visibility: visible !important;
-}
-
-/* Extra edge strip. This is intentionally a flattened circle in the middle
-   of the coin; when rotating on X it reads as the connected coin wall. */
-.flip-coin-inner::after {
-  content: "" !important;
-  position: absolute !important;
-  inset: 1.25% !important;
-  border-radius: 50% !important;
-  transform: rotateX(90deg) scaleY(.16) !important;
-  background: linear-gradient(180deg, #334155, #f8fafc 48%, #475569) !important;
-  box-shadow:
-    0 0 calc(var(--flip-depth) * 1.25) rgba(15,23,42,.42),
-    inset 0 0 10px rgba(255,255,255,.28) !important;
-  backface-visibility: visible !important;
-  -webkit-backface-visibility: visible !important;
-  pointer-events: none !important;
-}
-
-.flip-face {
-  clip-path: circle(50% at 50% 50%) !important;
-  transform-style: preserve-3d !important;
-}
-.flip-face-heads {
-  transform: translateZ(var(--flip-depth)) !important;
-}
-.flip-face-tails {
-  transform: rotateX(180deg) translateZ(var(--flip-depth)) !important;
-}
-
-.flip-coin.is-waiting .flip-coin-inner {
-  animation: flip-ready-vertical 1200ms ease-in-out infinite !important;
-}
-@keyframes flip-ready-vertical {
-  0%, 100% { transform: translate3d(0,0,0) rotateX(0deg) rotateY(-8deg) rotateZ(0deg); }
-  50%      { transform: translate3d(0,-6px,0) rotateX(8deg) rotateY(8deg) rotateZ(0deg); }
-}
-
-.flip-coin.is-tossing .flip-coin-inner {
-  animation: flip-toss-vertical var(--toss-duration, 1500ms) cubic-bezier(.16,.76,.18,1) forwards !important;
-}
-@keyframes flip-toss-vertical {
-  0%   { transform: translate3d(0, 0, 0) rotateX(0deg) rotateY(0deg) rotateZ(0deg) scale(1); }
-  12%  { transform: translate3d(0, -36px, 0) rotateX(420deg) rotateY(0deg) rotateZ(0deg) scale(1.025); }
-  30%  { transform: translate3d(0, -104px, 0) rotateX(900deg) rotateY(0deg) rotateZ(0deg) scale(1.055); }
-  52%  { transform: translate3d(0, -122px, 0) rotateX(1440deg) rotateY(0deg) rotateZ(0deg) scale(1.06); }
-  72%  { transform: translate3d(0, -52px, 0) rotateX(calc(var(--final-x, 2160deg) - 170deg)) rotateY(0deg) rotateZ(0deg) scale(1.025); }
-  86%  { transform: translate3d(0, 0, 0) rotateX(calc(var(--final-x, 2160deg) + 10deg)) rotateY(0deg) rotateZ(0deg) scale(1.045, .94); }
-  94%  { transform: translate3d(0, -7px, 0) rotateX(calc(var(--final-x, 2160deg) - 4deg)) rotateY(0deg) rotateZ(0deg) scale(.99, 1.025); }
-  100% { transform: translate3d(0, 0, 0) rotateX(var(--final-x, 2160deg)) rotateY(0deg) rotateZ(0deg) scale(1); }
-}
-
-.flip-coin.is-tossing .flip-coin-shadow {
-  animation: flip-shadow-vertical var(--toss-duration, 1500ms) cubic-bezier(.16,.76,.18,1) forwards !important;
-}
-@keyframes flip-shadow-vertical {
-  0%, 100% { transform: translateX(-50%) scaleX(1); opacity: .42; }
-  30%      { transform: translateX(-50%) scaleX(.48); opacity: .20; }
-  52%      { transform: translateX(-50%) scaleX(.30); opacity: .12; }
-  76%      { transform: translateX(-50%) scaleX(.78); opacity: .30; }
-  86%      { transform: translateX(-50%) scaleX(.96); opacity: .38; }
-}
-@media (prefers-reduced-motion: reduce) {
-  .flip-coin.is-tossing .flip-coin-inner {
-    transform: rotateX(var(--final-x, 2160deg)) !important;
-    transition: transform 420ms ease-out !important;
-  }
-}
-
-/* Sound system removed; hide old cached control if present. */
-#sound-toggle { display: none !important; }
-
-.prefix { font-weight: 800; color: var(--gold-deep); }
-.balance-pill::before { content: "◉"; font-size: 11px; filter: drop-shadow(0 1px 2px rgba(90,58,0,.35)); }
-
-/* Password strength meter */
-.password-meter {
-  display: grid;
-  gap: 7px;
-  margin-top: -4px;
-  margin-bottom: 2px;
-}
-.password-meter-bar {
-  height: 8px;
-  border-radius: 999px;
-  background: var(--bg-elev-3);
-  overflow: hidden;
-  border: 1px solid var(--line);
-}
-.password-meter-bar span {
-  display: block;
-  height: 100%;
-  width: 0%;
-  border-radius: inherit;
-  background: linear-gradient(90deg, var(--bad), var(--warn), var(--good));
-  transition: width 180ms ease;
-}
-.password-meter-text {
-  font-size: 12px;
-  color: var(--text-dim);
-}
-.password-meter[data-score="0"] .password-meter-text,
-.password-meter[data-score="1"] .password-meter-text { color: var(--bad); }
-.password-meter[data-score="2"] .password-meter-text,
-.password-meter[data-score="3"] .password-meter-text { color: var(--warn); }
-.password-meter[data-score="4"] .password-meter-text,
-.password-meter[data-score="5"] .password-meter-text { color: var(--good); }
-
-/* =====================================================================
-   v0.9.4 requested upgrades — profile stats, online count, leaderboard stats,
-   mobile polish, and calmer flip motion.
-   ===================================================================== */
-.user-profile-btn {
-  border: 1px solid var(--line);
-  background: color-mix(in srgb, var(--bg-elev) 88%, transparent);
-  color: var(--text);
-  border-radius: 999px;
-  padding: 6px 11px;
-  font-weight: 750;
-  cursor: pointer;
-  box-shadow: var(--shadow-sm);
-  transition: transform 120ms ease, border-color 150ms ease, background 150ms ease;
-}
-.user-profile-btn:hover {
-  transform: translateY(-1px);
-  border-color: color-mix(in srgb, var(--primary) 70%, var(--line));
-  background: color-mix(in srgb, var(--bg-elev-2) 92%, var(--primary) 8%);
-}
-.online-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  padding: 6px 10px;
-  border-radius: 999px;
-  border: 1px solid color-mix(in srgb, var(--good) 45%, var(--line));
-  background: color-mix(in srgb, var(--good) 12%, transparent);
-  color: var(--text-dim);
-  font-size: 12px;
-  font-weight: 800;
-  white-space: nowrap;
-}
-.online-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--good);
-  box-shadow: 0 0 0 4px color-mix(in srgb, var(--good) 18%, transparent);
-}
-.profile-modal-card { max-width: 520px !important; }
-.profile-modal-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 14px;
-  margin-bottom: 14px;
-}
-.profile-modal-head .icon-btn {
-  font-size: 24px;
-  line-height: 1;
-}
-.eyebrow {
-  margin: 0 0 4px;
-  color: var(--text-mute);
-  font-size: 11px;
-  font-weight: 850;
-  letter-spacing: .12em;
-  text-transform: uppercase;
-}
-.profile-stats-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-}
-.stat-card {
-  border: 1px solid var(--line);
-  border-radius: var(--radius-md);
-  background: linear-gradient(135deg, color-mix(in srgb, var(--bg-elev) 92%, transparent), color-mix(in srgb, var(--bg-elev-2) 86%, transparent));
-  padding: 13px;
-  min-width: 0;
-}
-.stat-card span {
-  display: block;
-  color: var(--text-mute);
-  font-size: 12px;
-  font-weight: 700;
-  margin-bottom: 5px;
-}
-.stat-card strong {
-  display: block;
-  color: var(--text);
-  font-size: clamp(16px, 4vw, 20px);
-  line-height: 1.15;
-  overflow-wrap: anywhere;
-}
-.profile-note {
-  margin: 12px 0 0;
-  color: var(--text-mute);
-  font-size: 12px;
-}
-.leaderboard-rows .lb-row {
-  grid-template-columns: 48px minmax(0, 1fr) minmax(110px, auto) auto !important;
-  gap: 12px;
-}
-.lb-stats {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 6px;
-  color: var(--text-mute);
-  font-size: 12px;
-  font-weight: 750;
-  white-space: nowrap;
-}
-.lb-stats span {
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  padding: 4px 8px;
-  background: color-mix(in srgb, var(--bg-elev-2) 72%, transparent);
-}
-.flip-modal-card,
-.flip-stage,
-.flip-coin,
-.flip-coin-inner {
-  will-change: transform;
-}
-.flip-coin.is-tossing .flip-coin-inner {
-  animation-timing-function: cubic-bezier(.14,.72,.18,1) !important;
-}
-@media (max-width: 760px) {
-  main { padding: 18px 12px 76px; }
-  .topbar {
-    align-items: stretch;
-    flex-wrap: wrap;
-    gap: 10px;
-    padding: 10px 12px;
-  }
-  .brand { min-width: 0; }
-  .brand-text { max-width: 44vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .topbar-right {
-    width: 100%;
-    justify-content: space-between;
-    gap: 8px;
-  }
-  .user-name { display: inline-flex !important; }
-  .online-pill { order: -1; }
-  .leaderboard-rows .lb-row {
-    grid-template-columns: 38px minmax(0, 1fr) auto !important;
+  .my-row-time   { grid-area: time; }
+  .my-row-cancel { grid-area: cancel; justify-self: end; }
+
+  .lb-row {
+    grid-template-columns: 38px minmax(0, 1fr) auto;
     grid-template-areas:
       "rank name balance"
-      "rank stats stats";
+      ".    stats stats";
     align-items: center;
   }
-  .lb-rank { grid-area: rank; width: 30px; height: 30px; }
-  .lb-name { grid-area: name; }
-  .lb-balance { grid-area: balance; min-width: 94px; }
-  .lb-stats { grid-area: stats; justify-content: flex-start; margin-top: -2px; }
+  .lb-rank    { grid-area: rank; width: 32px; height: 32px; font-size: 12px; }
+  .lb-name    { grid-area: name; }
+  .lb-stats   { grid-area: stats; justify-content: flex-start; margin-top: 2px; }
+  .lb-balance { grid-area: balance; }
+
+  .modal { padding: 22px 18px 18px; border-radius: var(--radius-lg); }
+  .flip-stage { height: 210px; }
+
   .profile-stats-grid { grid-template-columns: 1fr; }
+  .confirm-actions { grid-template-columns: 1fr; }
 }
+
 @media (max-width: 430px) {
-  .topbar-right { flex-wrap: wrap; justify-content: flex-start; }
-  .balance-pill, .user-profile-btn, .online-pill { font-size: 12px; padding: 6px 9px; }
-  .btn-sm { padding: 6px 9px; }
-}
-
-/* ==========================================================
-   v1.3 — Locked-Gold pill and footer polish
-   ========================================================== */
-
-/* Locked-Gold pill in topbar — visually quieter than balance-pill so it
-   reads as a secondary status, not a competing primary number. */
-.locked-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 10px;
-  border-radius: 999px;
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.01em;
-  color: var(--muted, #9aa3b2);
-  background: color-mix(in srgb, var(--card-bg, #1a1f2e) 70%, transparent);
-  border: 1px solid color-mix(in srgb, var(--border, #2a3040) 70%, transparent);
-  white-space: nowrap;
-}
-.locked-pill[hidden] { display: none; }
-.locked-pill .locked-icon { font-size: 11px; opacity: 0.85; }
-
-
-/* Footer polish — a single line with the version, fineprint, and link. */
-.app-footer {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-wrap: wrap;
-  gap: 6px;
-  font-size: 11.5px;
-  opacity: 0.78;
-}
-.app-footer-sep { opacity: 0.5; }
-.app-footer-link {
-  background: none;
-  border: 0;
-  color: inherit;
-  font: inherit;
-  text-decoration: underline;
-  text-underline-offset: 2px;
-  cursor: pointer;
-  padding: 0;
-}
-.app-footer-link:hover { opacity: 1; }
-
-/* Mobile: tuck locked-pill into a second line gracefully. */
-@media (max-width: 430px) {
-  .locked-pill { font-size: 11px; padding: 5px 8px; }
+  .topbar-right { gap: 6px; }
+  .balance-pill, .user-name, .online-pill, .locked-pill { font-size: 11.5px; padding: 5px 9px; }
+  .icon-btn { width: 32px; height: 32px; }
+  .btn-sm { padding: 6px 10px; }
+  .floating-toggle { right: 12px; top: 12px; width: 38px; height: 38px; }
 }

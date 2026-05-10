@@ -1,18 +1,16 @@
 -- =====================================================================
--- Coinflip LB — PostgreSQL schema (v1.3, public-release)
+-- Coinflip LB schema (v1.4)
 -- ---------------------------------------------------------------------
--- This file is idempotent. Running it against a fresh database creates
--- everything the app needs; running it against an older v1.0 database
--- adds the new columns/tables/indexes safely (existing data is kept).
+-- Fully idempotent. Safe to re-run after every deploy.
 --
--- For the simplest path on Railway:
---   npm run init-db
--- which executes this whole file via init-db.js.
+-- IMPORTANT: The previous schema (v1.3) was broken — it referenced
+-- columns like `signup_ip_hash` in indexes WITHOUT first creating them,
+-- so `npm run init-db` failed on any fresh database. This file fixes
+-- that by creating every column that server.js reads or writes,
+-- BEFORE creating any index that touches them.
 -- =====================================================================
 
--- ---------------------------------------------------------------------
--- 1. Users
--- ---------------------------------------------------------------------
+-- ---------- users ---------------------------------------------------
 CREATE TABLE IF NOT EXISTS users (
   id            SERIAL PRIMARY KEY,
   username      VARCHAR(32) UNIQUE NOT NULL,
@@ -21,40 +19,31 @@ CREATE TABLE IF NOT EXISTS users (
   created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Current columns added safely on existing deployments.
-ALTER TABLE users ADD COLUMN IF NOT EXISTS signup_ip_hash    TEXT;
-ALTER TABLE users ADD COLUMN IF NOT EXISTS signup_ua_hash    TEXT;
-ALTER TABLE users ADD COLUMN IF NOT EXISTS last_ip_hash      TEXT;
-ALTER TABLE users ADD COLUMN IF NOT EXISTS last_seen_at      TIMESTAMPTZ;
--- Bumping token_version invalidates every JWT issued before the bump.
--- Used by logout-all / password reset flows.
-ALTER TABLE users ADD COLUMN IF NOT EXISTS token_version     INTEGER NOT NULL DEFAULT 0;
-ALTER TABLE users ADD COLUMN IF NOT EXISTS games_played      INTEGER NOT NULL DEFAULT 0;
-ALTER TABLE users ADD COLUMN IF NOT EXISTS wins              INTEGER NOT NULL DEFAULT 0;
-ALTER TABLE users ADD COLUMN IF NOT EXISTS losses            INTEGER NOT NULL DEFAULT 0;
+-- Idempotent column additions for stats and signup-fingerprinting.
+-- All of these are referenced by server.js and the leaderboard query;
+-- without them the app crashes at runtime.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS games_played       INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS wins               INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS losses             INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS current_win_streak INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS max_win_streak     INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS signup_ip_hash     TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS signup_ua_hash     TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS last_ip_hash       TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS last_seen_at       TIMESTAMPTZ;
 
--- Removes account email collection completely. Safe on fresh DBs; on existing DBs this deletes old email data.
-DROP INDEX IF EXISTS users_email_lower_uniq;
-ALTER TABLE users DROP COLUMN IF EXISTS email;
-ALTER TABLE users DROP COLUMN IF EXISTS email_verified;
+-- v1.3 cleanup: remove old email and seed-check columns if they exist.
+-- These were dropped from the product but could linger on upgraded DBs.
+ALTER TABLE users  DROP COLUMN IF EXISTS email;
+ALTER TABLE users  DROP COLUMN IF EXISTS email_verified;
 
--- Case-insensitive username uniqueness. The original VARCHAR(32) UNIQUE
--- constraint is case-sensitive, so "alice" and "Alice" could coexist.
--- The functional unique index below closes that gap and is also what the
--- registration race-handler depends on.
 CREATE UNIQUE INDEX IF NOT EXISTS users_username_lower_uniq ON users (LOWER(username));
-
-CREATE INDEX IF NOT EXISTS idx_users_balance        ON users(balance DESC);
-CREATE INDEX IF NOT EXISTS idx_users_signup_ip_hash ON users(signup_ip_hash);
-CREATE INDEX IF NOT EXISTS idx_users_created_at     ON users(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_users_balance         ON users(balance DESC);
+CREATE INDEX IF NOT EXISTS idx_users_signup_ip_hash  ON users(signup_ip_hash);
+CREATE INDEX IF NOT EXISTS idx_users_created_at      ON users(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_users_leaderboard     ON users(balance DESC, created_at ASC);
 
-
--- ---------------------------------------------------------------------
--- 2. Games
--- ---------------------------------------------------------------------
+-- ---------- games ---------------------------------------------------
 CREATE TABLE IF NOT EXISTS games (
   id             SERIAL PRIMARY KEY,
   creator_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -69,15 +58,13 @@ CREATE TABLE IF NOT EXISTS games (
   completed_at   TIMESTAMPTZ
 );
 
--- v1.3 removes public seed-check storage completely.
--- The game now uses a direct server-side CSPRNG flip at join time.
+-- v1.3 cleanup: drop old provably-fair / seed-check columns if present.
 ALTER TABLE games DROP COLUMN IF EXISTS server_seed;
 ALTER TABLE games DROP COLUMN IF EXISTS server_seed_hash;
 ALTER TABLE games DROP COLUMN IF EXISTS client_seed;
 ALTER TABLE games DROP COLUMN IF EXISTS nonce;
 ALTER TABLE games DROP COLUMN IF EXISTS pf_algo;
 
--- Indexes the API queries lean on.
 CREATE INDEX IF NOT EXISTS idx_games_status         ON games(status);
 CREATE INDEX IF NOT EXISTS idx_games_creator        ON games(creator_id);
 CREATE INDEX IF NOT EXISTS idx_games_joiner         ON games(joiner_id);
@@ -86,42 +73,7 @@ CREATE INDEX IF NOT EXISTS idx_games_completed_at   ON games(completed_at DESC);
 CREATE INDEX IF NOT EXISTS idx_games_status_created ON games(status, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_games_status_wager   ON games(status, wager);
 
-
--- Backfill aggregate stats for existing completed games. Streak fields are
--- maintained exactly for new games; existing streaks reset to 0 unless you
--- run a custom historical streak migration.
-WITH stats AS (
-  SELECT u.id,
-         COUNT(g.id)::int AS games_played,
-         COUNT(g.id) FILTER (WHERE g.winner_id = u.id)::int AS wins,
-         COUNT(g.id) FILTER (WHERE g.winner_id IS NOT NULL AND g.winner_id <> u.id)::int AS losses
-    FROM users u
-    LEFT JOIN games g
-      ON g.status = 'completed'
-     AND (g.creator_id = u.id OR g.joiner_id = u.id)
-   GROUP BY u.id
-)
-UPDATE users u
-   SET games_played = stats.games_played,
-       wins = stats.wins,
-       losses = stats.losses
-  FROM stats
- WHERE u.id = stats.id;
-
-
--- ---------------------------------------------------------------------
--- 3. Balance transaction ledger 
--- ---------------------------------------------------------------------
--- Every change to users.balance is paired with one row here, written in
--- the same SQL transaction. This gives us:
---   - A full audit trail for every Gold movement.
---   - A way to detect bugs that silently change balances.
---   - An admin tool surface for suspicious-activity queries.
---
--- Allowed `type` values are validated by the application layer, not
--- the schema, so we don't have to migrate the CHECK constraint every
--- time a new movement type is added.
--- ---------------------------------------------------------------------
+-- ---------- balance_transactions (audit ledger) --------------------
 CREATE TABLE IF NOT EXISTS balance_transactions (
   id              BIGSERIAL PRIMARY KEY,
   user_id         INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -139,14 +91,7 @@ CREATE INDEX IF NOT EXISTS idx_balance_tx_game        ON balance_transactions(re
 CREATE INDEX IF NOT EXISTS idx_balance_tx_type        ON balance_transactions(type);
 CREATE INDEX IF NOT EXISTS idx_balance_tx_created_at  ON balance_transactions(created_at DESC);
 
-
--- ---------------------------------------------------------------------
--- 4. Signup-attempt log  — DB-backed IP/UA throttle
--- ---------------------------------------------------------------------
--- We keep one row per signup attempt (success OR fail) so signup-rate
--- limits survive process restarts and (eventually) multi-replica
--- deployments. Old rows are reaped by the background job in server.js.
--- ---------------------------------------------------------------------
+-- ---------- signup_attempts (abuse tracking) -----------------------
 CREATE TABLE IF NOT EXISTS signup_attempts (
   id          BIGSERIAL PRIMARY KEY,
   ip_hash     TEXT NOT NULL,
@@ -157,18 +102,3 @@ CREATE TABLE IF NOT EXISTS signup_attempts (
 
 CREATE INDEX IF NOT EXISTS idx_signup_attempts_ip_time ON signup_attempts(ip_hash, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_signup_attempts_created ON signup_attempts(created_at DESC);
-
-
--- ---------------------------------------------------------------------
--- Optional cleanup: drop the original case-sensitive UNIQUE constraint
--- on users.username if it exists. The functional unique index above is
--- strictly stronger, so this is safe -- but we leave it as a manual step
--- because the constraint name varies across deployments.
---
--- Find the name with:
---   SELECT conname FROM pg_constraint WHERE conrelid = 'users'::regclass AND contype = 'u';
--- Then run, e.g.:
---   ALTER TABLE users DROP CONSTRAINT users_username_key;
---
--- Leaving it in place is harmless; signup logic uses LOWER() comparisons.
--- =====================================================================

@@ -13,15 +13,16 @@
   <script src="config.js" defer></script>
   <script src="app.js" defer></script>
 </head>
-<body data-config="loading" data-theme="dark">
+<body data-config="loading" data-theme="dark" data-view="auth">
 
-  <!-- Decorative background. All purely visual — non-interactive. -->
+  <!-- Decorative background. Purely visual, non-interactive. -->
   <div class="bg-deco" aria-hidden="true">
     <div class="bg-orb orb-a"></div>
     <div class="bg-orb orb-b"></div>
     <div class="bg-orb orb-c"></div>
     <div class="bg-grid"></div>
   </div>
+
   <div class="toast-stack" id="toast-stack" aria-live="polite" aria-atomic="false"></div>
 
   <!-- Topbar appears only after sign-in -->
@@ -40,18 +41,20 @@
       <span class="brand-text" id="brand-name">Coinflip LB</span>
     </a>
     <div class="topbar-right">
-      <div class="balance-pill" id="balance-pill" hidden aria-label="Gold balance">
-        <span class="balance-value" id="balance-value">0 Gold</span>
-      </div>
-      <div class="locked-pill" id="locked-pill" hidden aria-label="Gold locked in open games" title="Gold reserved in your open games. Cancel one to free it.">
+      <span class="online-pill" id="online-pill" hidden title="Online players">
+        <span class="online-dot"></span>
+        <span id="online-count">0 online</span>
+      </span>
+      <span class="locked-pill" id="locked-pill" hidden title="Gold reserved in your open games. Cancel one to free it.">
         <span class="locked-icon" aria-hidden="true">🔒</span>
         <span class="locked-value" id="locked-value">0 locked</span>
-      </div>
-      <button type="button" class="user-name user-profile-btn" id="user-name" hidden title="View your stats" aria-label="View your stats"></button>
-      <span class="online-pill" id="online-pill" hidden title="Online players"><span class="online-dot"></span><span id="online-count">0 online</span></span>
-      <button type="button" class="icon-btn" id="theme-toggle" aria-label="Switch to light mode" title="Toggle light mode">
+      </span>
+      <span class="balance-pill" id="balance-pill" hidden aria-label="Gold balance">
+        <span class="balance-value" id="balance-value">0 Gold</span>
+      </span>
+      <button type="button" class="user-name" id="user-name" hidden title="View your stats" aria-label="View your stats"></button>
+      <button type="button" class="icon-btn" id="theme-toggle" aria-label="Toggle theme" title="Toggle theme">
         <svg id="theme-icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">
-          <!-- Sun by default; JS swaps the path for the moon. -->
           <path id="theme-icon-path"
                 d="M12 4V2m0 20v-2m8-8h2M2 12h2m13.66-5.66l1.42-1.42M4.93 19.07l1.41-1.41m0-11.32L4.93 4.93m14.14 14.14l-1.42-1.42M12 7a5 5 0 1 0 0 10 5 5 0 0 0 0-10z"
                 fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
@@ -62,7 +65,7 @@
   </header>
 
   <!-- Sign-in screen also gets a theme toggle (no topbar there) -->
-  <button type="button" class="icon-btn floating-toggle" id="theme-toggle-auth" aria-label="Switch to light mode" title="Toggle light mode">
+  <button type="button" class="icon-btn floating-toggle" id="theme-toggle-auth" aria-label="Toggle theme" title="Toggle theme">
     <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">
       <path id="theme-icon-path-auth"
             d="M12 4V2m0 20v-2m8-8h2M2 12h2m13.66-5.66l1.42-1.42M4.93 19.07l1.41-1.41m0-11.32L4.93 4.93m14.14 14.14l-1.42-1.42M12 7a5 5 0 1 0 0 10 5 5 0 0 0 0-10z"
@@ -72,7 +75,7 @@
 
   <main>
     <!-- ============================================================ -->
-    <!-- AUTH VIEW (default landing — no separate marketing page) -->
+    <!-- AUTH VIEW -->
     <!-- ============================================================ -->
     <section class="view view-auth" id="view-auth">
       <div class="auth-card">
@@ -81,7 +84,7 @@
         </div>
 
         <h1 class="auth-title">Coinflip LB</h1>
-        <p class="auth-subtitle">A fast coinflip arena. Pick a side, wager your gold, and climb the leaderboard.</p>
+        <p class="auth-subtitle">A fast coinflip arena. Pick a side, wager your gold, climb the leaderboard.</p>
 
         <div class="tabs auth-tabs" role="tablist">
           <button class="tab is-active" data-auth-tab="login" role="tab" aria-selected="true">Sign in</button>
@@ -136,7 +139,7 @@
               required
             />
           </label>
-<label class="field">
+          <label class="field">
             <span class="field-label">Password</span>
             <input
               type="password"
@@ -160,7 +163,7 @@
               name="confirm-password"
               maxlength="200"
               autocomplete="new-password"
-              placeholder="At least 6 characters"
+              placeholder="Repeat your password"
               required
             />
           </label>
@@ -168,7 +171,7 @@
           <p class="form-feedback" id="signup-feedback" hidden></p>
         </form>
 
-        <p class="auth-fineprint">Call it. Flip it. Win gold. Challenge friends. Climb the leaderboard.</p>
+        <p class="auth-fineprint">Call it. Flip it. Win gold. Climb the leaderboard.</p>
       </div>
     </section>
 
@@ -179,7 +182,7 @@
 
       <!-- Result banner: shows when one of the user's open games has just been joined -->
       <div class="result-banner" id="result-banner" hidden role="status" aria-live="polite">
-        <div class="static-coin static-coin-sm result-banner-coin" id="result-banner-coin" aria-hidden="true"><span>H</span></div>
+        <div class="static-coin static-coin-sm static-coin-heads" id="result-banner-coin" aria-hidden="true"><span>H</span></div>
         <div class="result-banner-text">
           <div class="result-banner-title" id="result-banner-title">—</div>
           <div class="result-banner-sub" id="result-banner-sub">—</div>
@@ -187,14 +190,13 @@
         <button class="btn btn-ghost btn-sm" id="result-banner-close" aria-label="Dismiss">✕</button>
       </div>
 
-      <!-- Lost state: player can still browse and cancel their open games. Create/join are locked. -->
+      <!-- Lost state -->
       <div class="card lost-card" id="lost-card" hidden role="status" aria-live="polite">
         <div class="lost-coin" aria-hidden="true">0G</div>
         <div class="lost-copy">
           <h2>Out of Gold</h2>
-          <p>You're at 0 Gold. You can still browse open games, the leaderboard, and cancel any of your open games to free escrowed Gold. Create / join are locked until your balance is positive.</p>
+          <p>You're at 0 Gold. You can still browse open games, the leaderboard, and cancel your own open games to free escrowed Gold. Create / join are locked until your balance is positive.</p>
         </div>
-        <button type="button" class="btn btn-primary btn-sm" id="lost-signout">Sign out</button>
       </div>
 
       <!-- Create a game -->
@@ -222,7 +224,7 @@
             </label>
           </div>
 
-          <label class="field wager-field">
+          <label class="field">
             <span class="field-label">Wager</span>
             <div class="prefix-input">
               <span class="prefix">G</span>
@@ -232,16 +234,14 @@
                 name="wager"
                 inputmode="numeric"
                 pattern="[0-9]*"
-                min="1"
-                step="1"
-                placeholder="1 - max"
+                placeholder="Enter amount"
                 required
               />
             </div>
             <span class="field-hint" id="wager-hint" hidden></span>
           </label>
 
-          <button type="submit" class="btn btn-primary btn-lg" id="create-btn">Create game</button>
+          <button type="submit" class="btn btn-primary btn-lg btn-block" id="create-btn">Create game</button>
           <p class="form-feedback" id="create-feedback" hidden></p>
         </form>
       </div>
@@ -257,21 +257,21 @@
       </div>
 
       <!-- Tab panel: open games -->
-      <div class="tab-panel is-active" id="panel-lobby" role="tabpanel">
+      <div class="tab-panel" id="panel-lobby" role="tabpanel">
         <div class="panel-toolbar">
           <div class="filters">
             <label class="filter">
               <span class="filter-label">Min</span>
               <div class="prefix-input prefix-input-sm">
                 <span class="prefix">G</span>
-                <input type="text" id="filter-min" min="0" step="1" placeholder="any" inputmode="numeric" pattern="[0-9]*" />
+                <input type="text" id="filter-min" placeholder="any" inputmode="numeric" pattern="[0-9]*" />
               </div>
             </label>
             <label class="filter">
               <span class="filter-label">Max</span>
               <div class="prefix-input prefix-input-sm">
                 <span class="prefix">G</span>
-                <input type="text" id="filter-max" min="0" step="1" placeholder="any" inputmode="numeric" pattern="[0-9]*" />
+                <input type="text" id="filter-max" placeholder="any" inputmode="numeric" pattern="[0-9]*" />
               </div>
             </label>
             <button type="button" class="btn btn-ghost btn-sm" id="apply-filters">Apply</button>
@@ -284,7 +284,11 @@
         <div class="empty-state" id="games-empty" hidden>
           No open games right now. Be the first — create one above.
         </div>
-        <div class="loading-row loading-card" id="games-loading" aria-live="polite" data-label="Loading open games…"><div class="skeleton-row"><span class="skeleton-dot"></span><span class="skeleton-line"></span><span class="skeleton-pill"></span></div><div class="skeleton-row"><span class="skeleton-dot"></span><span class="skeleton-line"></span><span class="skeleton-pill"></span></div><div class="skeleton-row"><span class="skeleton-dot"></span><span class="skeleton-line"></span><span class="skeleton-pill"></span></div><div class="skeleton-row"><span class="skeleton-dot"></span><span class="skeleton-line"></span><span class="skeleton-pill"></span></div></div>
+        <div class="loading-row loading-card" id="games-loading" aria-live="polite">
+          <div class="skeleton-row"><span class="skeleton-dot"></span><span class="skeleton-line"></span><span class="skeleton-pill"></span></div>
+          <div class="skeleton-row"><span class="skeleton-dot"></span><span class="skeleton-line"></span><span class="skeleton-pill"></span></div>
+          <div class="skeleton-row"><span class="skeleton-dot"></span><span class="skeleton-line"></span><span class="skeleton-pill"></span></div>
+        </div>
         <div class="pager" id="games-pager" hidden>
           <button type="button" class="btn btn-ghost btn-sm" id="games-prev">← Previous</button>
           <span class="pager-info" id="games-page-info">Page 1</span>
@@ -302,7 +306,11 @@
         <div class="empty-state" id="my-empty" hidden>
           You haven't played a game yet. Create one above to get started.
         </div>
-        <div class="loading-row loading-card" id="my-loading" hidden aria-live="polite" data-label="Loading your games…"><div class="skeleton-row"><span class="skeleton-dot"></span><span class="skeleton-line"></span><span class="skeleton-pill"></span></div><div class="skeleton-row"><span class="skeleton-dot"></span><span class="skeleton-line"></span><span class="skeleton-pill"></span></div><div class="skeleton-row"><span class="skeleton-dot"></span><span class="skeleton-line"></span><span class="skeleton-pill"></span></div><div class="skeleton-row"><span class="skeleton-dot"></span><span class="skeleton-line"></span><span class="skeleton-pill"></span></div></div>
+        <div class="loading-row loading-card" id="my-loading" hidden aria-live="polite">
+          <div class="skeleton-row"><span class="skeleton-dot"></span><span class="skeleton-line"></span><span class="skeleton-pill"></span></div>
+          <div class="skeleton-row"><span class="skeleton-dot"></span><span class="skeleton-line"></span><span class="skeleton-pill"></span></div>
+          <div class="skeleton-row"><span class="skeleton-dot"></span><span class="skeleton-line"></span><span class="skeleton-pill"></span></div>
+        </div>
         <div class="pager" id="my-pager" hidden>
           <button type="button" class="btn btn-ghost btn-sm" id="my-prev">← Previous</button>
           <span class="pager-info" id="my-page-info">Page 1</span>
@@ -318,7 +326,11 @@
         </div>
         <div class="rows leaderboard-rows" id="lb-rows"></div>
         <div class="empty-state" id="lb-empty" hidden>No players yet.</div>
-        <div class="loading-row loading-card" id="lb-loading" hidden aria-live="polite" data-label="Loading leaderboard…"><div class="skeleton-row"><span class="skeleton-dot"></span><span class="skeleton-line"></span><span class="skeleton-pill"></span></div><div class="skeleton-row"><span class="skeleton-dot"></span><span class="skeleton-line"></span><span class="skeleton-pill"></span></div><div class="skeleton-row"><span class="skeleton-dot"></span><span class="skeleton-line"></span><span class="skeleton-pill"></span></div><div class="skeleton-row"><span class="skeleton-dot"></span><span class="skeleton-line"></span><span class="skeleton-pill"></span></div><div class="skeleton-row"><span class="skeleton-dot"></span><span class="skeleton-line"></span><span class="skeleton-pill"></span></div></div>
+        <div class="loading-row loading-card" id="lb-loading" hidden aria-live="polite">
+          <div class="skeleton-row"><span class="skeleton-dot"></span><span class="skeleton-line"></span><span class="skeleton-pill"></span></div>
+          <div class="skeleton-row"><span class="skeleton-dot"></span><span class="skeleton-line"></span><span class="skeleton-pill"></span></div>
+          <div class="skeleton-row"><span class="skeleton-dot"></span><span class="skeleton-line"></span><span class="skeleton-pill"></span></div>
+        </div>
         <div class="pager" id="lb-pager" hidden>
           <button type="button" class="btn btn-ghost btn-sm" id="lb-prev">← Previous</button>
           <span class="pager-info" id="lb-page-info">Page 1</span>
@@ -329,7 +341,7 @@
   </main>
 
   <footer class="app-footer" aria-label="App info">
-    <span class="app-footer-version">v1.3</span>
+    <span class="app-footer-version">v1.4</span>
     <span class="app-footer-sep" aria-hidden="true">·</span>
     <span class="app-footer-fineprint">Fun Gold only — no real money.</span>
   </footer>
@@ -364,7 +376,6 @@
     </div>
   </div>
 
-
   <!-- =============================================================== -->
   <!-- PROFILE STATS MODAL -->
   <!-- =============================================================== -->
@@ -390,15 +401,15 @@
   </div>
 
   <!-- =============================================================== -->
-  <!-- CONFIRM MODAL (replaces native confirm() for Cancel game) -->
+  <!-- CONFIRM MODAL -->
   <!-- =============================================================== -->
   <div class="modal-backdrop" id="confirm-modal" hidden aria-hidden="true">
     <div class="modal modal-sm" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
-      <h2 id="confirm-title" class="flip-title">Cancel game?</h2>
-      <p class="confirm-body" id="confirm-body">Cancel this open game and refund the wager?</p>
+      <h2 id="confirm-title" class="flip-title">Confirm</h2>
+      <p class="confirm-body" id="confirm-body">Are you sure?</p>
       <div class="confirm-actions">
-        <button type="button" class="btn btn-ghost btn-lg" id="confirm-no">Keep game</button>
-        <button type="button" class="btn btn-danger btn-lg" id="confirm-yes">Cancel game</button>
+        <button type="button" class="btn btn-ghost btn-lg" id="confirm-no">Cancel</button>
+        <button type="button" class="btn btn-danger btn-lg" id="confirm-yes">Confirm</button>
       </div>
     </div>
   </div>
@@ -407,7 +418,6 @@
   <!-- TEMPLATES -->
   <!-- =============================================================== -->
 
-  <!-- Open game row -->
   <template id="tpl-game-row">
     <div class="row game-row">
       <div class="game-row-creator">
@@ -426,7 +436,6 @@
     </div>
   </template>
 
-  <!-- My-games row -->
   <template id="tpl-my-row">
     <div class="row my-row">
       <div class="my-row-status"></div>
@@ -437,7 +446,6 @@
     </div>
   </template>
 
-  <!-- Leaderboard row -->
   <template id="tpl-lb-row">
     <div class="row lb-row">
       <div class="lb-rank"></div>
